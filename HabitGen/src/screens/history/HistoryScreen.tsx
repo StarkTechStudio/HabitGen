@@ -32,7 +32,7 @@ const HistoryScreen: React.FC = () => {
 
   const dayLabels = useMemo(() => {
     return last7Days.map(d => {
-      const date = new Date(d);
+      const date = new Date(d + 'T12:00:00');
       return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
     });
   }, [last7Days]);
@@ -45,30 +45,42 @@ const HistoryScreen: React.FC = () => {
           s.completed &&
           (!selectedHabitId || s.habitId === selectedHabitId),
       );
+      const totalMinutes = Math.round(
+        daySessions.reduce((sum, s) => sum + s.duration, 0) / 60,
+      );
       return {
         day,
         count: daySessions.length,
-        totalMinutes: Math.round(
-          daySessions.reduce((sum, s) => sum + s.duration, 0) / 60,
-        ),
+        totalMinutes,
       };
     });
   }, [last7Days, sessions, selectedHabitId]);
 
   const maxCount = Math.max(...chartData.map(d => d.count), 1);
 
+  // Show only COMPLETED sessions, one per habit (latest), no quit
   const recentSessions = useMemo(() => {
-    return [...sessions]
-      .filter(s => !selectedHabitId || s.habitId === selectedHabitId)
+    const completed = sessions
+      .filter(s => s.completed && (!selectedHabitId || s.habitId === selectedHabitId));
+
+    // Deduplicate: only latest session per habit
+    const latestPerHabit = new Map<string, typeof completed[0]>();
+    for (const s of completed) {
+      const existing = latestPerHabit.get(s.habitId);
+      if (!existing || s.startTime > existing.startTime) {
+        latestPerHabit.set(s.habitId, s);
+      }
+    }
+
+    return Array.from(latestPerHabit.values())
       .sort((a, b) => b.startTime - a.startTime)
       .slice(0, 20);
   }, [sessions, selectedHabitId]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+      {/* FIXED HEADER */}
+      <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background }]}>
         <Text style={[styles.title, { color: theme.colors.text }]}>History</Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Track your progress over time
@@ -156,11 +168,11 @@ const HistoryScreen: React.FC = () => {
                     style={[
                       styles.bar,
                       {
-                        height: Math.max(barHeight, 4),
+                        height: Math.max(barHeight, 8),
                         backgroundColor:
                           d.count > 0
                             ? theme.colors.primary
-                            : theme.colors.surfaceVariant,
+                            : theme.colors.border,
                         borderRadius: 6,
                       },
                     ]}
@@ -168,26 +180,46 @@ const HistoryScreen: React.FC = () => {
                   <Text style={[styles.barLabel, { color: theme.colors.textMuted }]}>
                     {dayLabels[i]}
                   </Text>
+                  {d.totalMinutes > 0 && (
+                    <Text style={[styles.barMinutes, { color: theme.colors.textMuted }]}>
+                      {d.totalMinutes} min
+                    </Text>
+                  )}
                 </View>
               );
             })}
           </View>
+          {/* Summary below chart */}
+          <View style={styles.chartSummary}>
+            <Text style={[styles.chartSummaryText, { color: theme.colors.textMuted }]}>
+              {chartData.reduce((s, d) => s + d.count, 0)} sessions {'\u{2022}'}{' '}
+              {chartData.reduce((s, d) => s + d.totalMinutes, 0)} min total
+            </Text>
+          </View>
         </View>
 
-        {/* Session log */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Recent Sessions
         </Text>
+      </View>
+
+      {/* SCROLLABLE SESSIONS ONLY */}
+      <ScrollView
+        style={styles.sessionsList}
+        contentContainerStyle={styles.sessionsContent}
+        showsVerticalScrollIndicator={false}>
         {recentSessions.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              No sessions recorded yet
+              No completed sessions yet. Start a habit timer to see your progress here.
             </Text>
           </View>
         ) : (
           recentSessions.map(session => {
             const habit = habits.find(h => h.id === session.habitId);
-            const mins = Math.round(session.duration / 60);
+            const durationSecs = session.duration;
+            const mins = Math.round(durationSecs / 60);
+            const durationStr = `${mins} min`;
             const time = new Date(session.startTime).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -210,27 +242,21 @@ const HistoryScreen: React.FC = () => {
                     {habit?.name || 'Unknown'}
                   </Text>
                   <Text style={[styles.sessionMeta, { color: theme.colors.textMuted }]}>
-                    {session.date} {'\u{2022}'} {time} {'\u{2022}'} {mins}m
+                    {session.date} {'\u{2022}'} {time} {'\u{2022}'} {durationStr}
                   </Text>
                 </View>
                 <View
                   style={[
                     styles.statusBadge,
-                    {
-                      backgroundColor: session.completed
-                        ? theme.colors.success + '20'
-                        : theme.colors.error + '20',
-                    },
+                    { backgroundColor: theme.colors.success + '20' },
                   ]}>
                   <Text
                     style={{
-                      color: session.completed
-                        ? theme.colors.success
-                        : theme.colors.error,
+                      color: theme.colors.success,
                       fontSize: 11,
                       fontWeight: '700',
                     }}>
-                    {session.completed ? 'Done' : 'Quit'}
+                    Done
                   </Text>
                 </View>
               </View>
@@ -246,25 +272,28 @@ const HistoryScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 60 },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 6 },
-  subtitle: { fontSize: 16, marginBottom: 20 },
-  filterRow: { marginBottom: 20 },
+  fixedHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 56,
+  },
+  title: { fontSize: 30, fontWeight: '800', marginBottom: 4 },
+  subtitle: { fontSize: 14, marginBottom: 16 },
+  filterRow: { marginBottom: 16 },
   filterContent: { gap: 8 },
   filterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
     borderWidth: 1,
   },
-  filterText: { fontSize: 13, fontWeight: '600' },
+  filterText: { fontSize: 12, fontWeight: '600' },
   chartCard: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 20,
-    marginBottom: 24,
+    padding: 16,
+    marginBottom: 16,
   },
-  chartTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16 },
+  chartTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
   chart: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -276,29 +305,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  barValue: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
-  bar: { width: 20, minHeight: 4 },
-  barLabel: { fontSize: 11, marginTop: 6, fontWeight: '500' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  barValue: { fontSize: 10, fontWeight: '600', marginBottom: 3 },
+  bar: { width: 18, minHeight: 4 },
+  barLabel: { fontSize: 10, marginTop: 5, fontWeight: '500' },
+  barMinutes: { fontSize: 8, marginTop: 2, fontWeight: '500' },
+  chartSummary: { marginTop: 10, alignItems: 'center' },
+  chartSummaryText: { fontSize: 11, fontWeight: '500' },
+  sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
+  sessionsList: { flex: 1 },
+  sessionsContent: { paddingHorizontal: 20 },
   emptyCard: {
-    padding: 30,
-    borderRadius: 16,
+    padding: 28,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
   },
-  emptyText: { fontSize: 14 },
+  emptyText: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: 8,
   },
-  sessionEmoji: { fontSize: 28, marginRight: 12 },
+  sessionEmoji: { fontSize: 26, marginRight: 12 },
   sessionInfo: { flex: 1 },
-  sessionName: { fontSize: 15, fontWeight: '600' },
-  sessionMeta: { fontSize: 12, marginTop: 2 },
+  sessionName: { fontSize: 14, fontWeight: '600' },
+  sessionMeta: { fontSize: 11, marginTop: 2 },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,

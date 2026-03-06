@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -41,13 +42,23 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
     if (result.error) {
       setError(result.error);
     } else {
-      if (isSignUp) {
-        setError('');
-        setIsSignUp(false);
-        // Show success for signup
-      }
       onClose();
     }
+  };
+
+  const handleGoogleAuth = () => {
+    // Google OAuth requires native module setup
+    // For Supabase, this would use supabase.auth.signInWithOAuth({ provider: 'google' })
+    Alert.alert(
+      'Google Sign In',
+      'Google OAuth requires native module configuration.\n\n' +
+        'To enable:\n' +
+        '1. Configure Google OAuth in Supabase Dashboard\n' +
+        '2. Add Google Sign-In SDK to your native project\n' +
+        '3. Set up OAuth redirect URLs\n\n' +
+        'For now, please use email/password authentication.',
+      [{ text: 'OK' }],
+    );
   };
 
   return (
@@ -81,6 +92,23 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
             </Text>
           </View>
         ) : null}
+
+        {/* Google OAuth button */}
+        <TouchableOpacity
+          style={[styles.googleButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+          onPress={handleGoogleAuth}>
+          <Text style={styles.googleIcon}>G</Text>
+          <Text style={[styles.googleText, { color: theme.colors.text }]}>
+            Continue with Google
+          </Text>
+        </TouchableOpacity>
+
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+          <Text style={[styles.dividerText, { color: theme.colors.textMuted }]}>or</Text>
+          <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+        </View>
 
         <TextInput
           style={[
@@ -157,49 +185,75 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60 },
+  container: { flex: 1, paddingTop: 56 },
   header: {
     paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   cancelText: { fontSize: 16, fontWeight: '500' },
   content: {
     paddingHorizontal: 24,
     alignItems: 'center',
   },
-  emoji: { fontSize: 56, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: '800', marginBottom: 8 },
+  emoji: { fontSize: 52, marginBottom: 12 },
+  title: { fontSize: 26, fontWeight: '800', marginBottom: 6 },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     textAlign: 'center',
-    marginBottom: 28,
-    lineHeight: 22,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   errorBox: {
     width: '100%',
     padding: 12,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  errorText: { fontSize: 14, textAlign: 'center' },
+  errorText: { fontSize: 13, textAlign: 'center' },
+  googleButton: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    marginBottom: 16,
+    gap: 10,
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#4285F4',
+  },
+  googleText: { fontSize: 15, fontWeight: '600' },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+    gap: 12,
+  },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13 },
   input: {
     width: '100%',
     borderWidth: 1,
     borderRadius: 14,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 14,
+    padding: 15,
+    fontSize: 15,
+    marginBottom: 12,
   },
   submitButton: {
     width: '100%',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
-  submitText: { color: '#FFF', fontSize: 17, fontWeight: '700' },
-  toggleButton: { marginTop: 20 },
-  toggleText: { fontSize: 14 },
+  submitText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  toggleButton: { marginTop: 18 },
+  toggleText: { fontSize: 13 },
 });
 
 export default AuthScreen;

@@ -10,12 +10,14 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/storage';
+import { useHabits } from '../../context/HabitContext';
 import AuthScreen from '../../components/AuthScreen';
 import PremiumScreen from '../../components/PremiumScreen';
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
+  const { refreshData } = useHabits();
   const [showAuth, setShowAuth] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
 
@@ -38,15 +40,16 @@ const AccountScreen: React.FC = () => {
   const handleClearData = () => {
     Alert.alert(
       'Clear All Data',
-      'This will delete all your habits, sessions, and streaks. This cannot be undone.',
+      'This will permanently delete ALL your habits, sessions, streaks, and settings. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Clear Everything',
           style: 'destructive',
           onPress: async () => {
             await storage.clearAll();
-            Alert.alert('Done', 'All data has been cleared. Restart the app to begin fresh.');
+            await refreshData();
+            Alert.alert('Data Cleared', 'All habits, streaks, and sessions have been deleted. Restart the app to begin fresh.');
           },
         },
       ],
@@ -122,11 +125,6 @@ const AccountScreen: React.FC = () => {
     {
       title: 'Data',
       items: [
-        {
-          label: 'Export Data',
-          emoji: '\u{1F4E4}',
-          onPress: () => Alert.alert('Export', 'Data export feature coming soon.'),
-        },
         {
           label: 'Clear All Data',
           emoji: '\u{1F5D1}\u{FE0F}',
@@ -225,44 +223,44 @@ const AccountScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 60 },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 20 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 56 },
+  title: { fontSize: 30, fontWeight: '800', marginBottom: 18 },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    borderRadius: 20,
+    padding: 18,
+    borderRadius: 18,
     borderWidth: 1,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: 28 },
-  profileInfo: { marginLeft: 16 },
-  profileName: { fontSize: 18, fontWeight: '700' },
-  profileSub: { fontSize: 13, marginTop: 2 },
-  section: { marginBottom: 24 },
+  avatarText: { fontSize: 26 },
+  profileInfo: { marginLeft: 14 },
+  profileName: { fontSize: 17, fontWeight: '700' },
+  profileSub: { fontSize: 12, marginTop: 2 },
+  section: { marginBottom: 22 },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     marginBottom: 8,
     marginLeft: 4,
   },
-  sectionCard: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  sectionCard: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 15,
   },
-  settingEmoji: { fontSize: 20, marginRight: 14 },
-  settingLabel: { fontSize: 15, fontWeight: '500', flex: 1 },
-  rightText: { fontSize: 13, fontWeight: '600' },
+  settingEmoji: { fontSize: 18, marginRight: 12 },
+  settingLabel: { fontSize: 14, fontWeight: '500', flex: 1 },
+  rightText: { fontSize: 12, fontWeight: '600' },
   bottomSpacer: { height: 100 },
 });
 

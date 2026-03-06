@@ -65,4 +65,10 @@ export const GOALS = [
   { id: 'sleep', label: 'Better Sleep', emoji: '\u{1F634}' },
   { id: 'hydration', label: 'Hydration', emoji: '\u{1F4A7}' },
   { id: 'focus', label: 'Deep Focus', emoji: '\u{1F3AF}' },
+  { id: 'trading', label: 'Trading', emoji: '\u{1F4C8}' },
+  { id: 'dancing', label: 'Dancing', emoji: '\u{1F57A}' },
+  { id: 'content', label: 'Content Creation', emoji: '\u{1F3AC}' },
+  { id: 'boxing', label: 'Boxing', emoji: '\u{1F94A}' },
+  { id: 'horseriding', label: 'Horse Riding', emoji: '\u{1F3C7}' },
+  { id: 'bikeriding', label: 'Bike Riding', emoji: '\u{1F6B4}' },
 ];

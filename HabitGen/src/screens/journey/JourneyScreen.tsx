@@ -1,66 +1,206 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import PremiumScreen from '../../components/PremiumScreen';
+import { storage } from '../../utils/storage';
 
-const journeys = [
+interface Journey {
+  id: string;
+  title: string;
+  emoji: string;
+  description: string;
+  days: number;
+  painPoint: string;
+  features: string[];
+}
+
+const journeys: Journey[] = [
   {
-    id: '1',
-    title: '30-Day Meditation',
-    emoji: '\u{1F9D8}',
-    description: 'Build a daily meditation practice from scratch',
-    days: 30,
-    premium: true,
-  },
-  {
-    id: '2',
-    title: 'Fitness Foundations',
-    emoji: '\u{1F4AA}',
-    description: 'Get moving with progressive daily workouts',
-    days: 21,
-    premium: true,
-  },
-  {
-    id: '3',
-    title: 'Reading Challenge',
-    emoji: '\u{1F4D6}',
-    description: 'Read for 20 minutes every day for a month',
-    days: 30,
-    premium: false,
-  },
-  {
-    id: '4',
-    title: 'Deep Focus Sprint',
-    emoji: '\u{1F3AF}',
-    description: 'Master deep work with daily focus sessions',
-    days: 14,
-    premium: true,
-  },
-  {
-    id: '5',
-    title: 'Morning Routine',
-    emoji: '\u{2600}\u{FE0F}',
-    description: 'Design and stick to a powerful morning ritual',
-    days: 21,
-    premium: true,
-  },
-  {
-    id: '6',
+    id: 'hydration',
     title: 'Hydration Habit',
     emoji: '\u{1F4A7}',
-    description: 'Track and improve your daily water intake',
+    description: 'Hourly water reminders with sound alarm. Never forget to hydrate.',
     days: 14,
-    premium: false,
+    painPoint: 'Forgetting to drink enough water throughout the day',
+    features: [
+      'Hourly notification reminders',
+      'Sound alarm with Complete/Cancel buttons',
+      'Cancel penalizes streak (-1), Complete adds (+1)',
+      'Daily water intake tracking',
+    ],
+  },
+  {
+    id: 'screen_detox',
+    title: 'Screen Time Detox',
+    emoji: '\u{1F4F5}',
+    description: 'Reduce social media usage with timed lockouts and mindful breaks.',
+    days: 21,
+    painPoint: 'Spending too much time on social media and phone',
+    features: [
+      'Scheduled phone-free intervals',
+      'Social media blocking reminders',
+      'Mindful break suggestions',
+      'Weekly screen time reports',
+    ],
+  },
+  {
+    id: 'sleep',
+    title: 'Better Sleep Routine',
+    emoji: '\u{1F634}',
+    description: 'Wind-down reminders and consistent sleep schedule training.',
+    days: 30,
+    painPoint: 'Irregular sleep schedule and poor sleep quality',
+    features: [
+      'Bedtime wind-down alerts (30 min before)',
+      'Blue light reminder notifications',
+      'Morning wake-up consistency tracking',
+      'Sleep quality self-rating',
+    ],
+  },
+  {
+    id: 'meditation',
+    title: '30-Day Meditation',
+    emoji: '\u{1F9D8}',
+    description: 'Progressive daily sessions from 5 to 30 minutes.',
+    days: 30,
+    painPoint: 'Stress, anxiety, and inability to focus',
+    features: [
+      'Guided session lengths (5 min to 30 min)',
+      'Daily mindfulness reminders',
+      'Streak-based progression',
+      'Calm breathing exercises',
+    ],
+  },
+  {
+    id: 'fitness',
+    title: 'Fitness Foundations',
+    emoji: '\u{1F4AA}',
+    description: 'Progressive daily workouts from beginner to intermediate.',
+    days: 21,
+    painPoint: 'Sedentary lifestyle and lack of exercise motivation',
+    features: [
+      'Daily workout reminders',
+      'Progressive difficulty increase',
+      'Rest day scheduling',
+      'Body weight exercise routines',
+    ],
+  },
+  {
+    id: 'reading',
+    title: 'Daily Reading',
+    emoji: '\u{1F4D6}',
+    description: 'Build a 20-minute daily reading habit with progress tracking.',
+    days: 30,
+    painPoint: 'Not reading enough or struggling to make time for books',
+    features: [
+      'Daily reading time reminders',
+      'Page/chapter tracking',
+      'Reading streak calendar',
+      'Book completion milestones',
+    ],
+  },
+  {
+    id: 'morning',
+    title: 'Morning Routine',
+    emoji: '\u{2600}\u{FE0F}',
+    description: 'Design and stick to a powerful 60-minute morning ritual.',
+    days: 21,
+    painPoint: 'Waking up groggy and rushing through mornings',
+    features: [
+      'Step-by-step morning checklist',
+      'Wake-up alarm integration',
+      'Morning journaling prompts',
+      'Progress streak tracking',
+    ],
+  },
+  {
+    id: 'focus',
+    title: 'Deep Focus Sprint',
+    emoji: '\u{1F3AF}',
+    description: 'Master deep work with Pomodoro-based focus sessions.',
+    days: 14,
+    painPoint: 'Constant distractions and inability to concentrate',
+    features: [
+      'Timed deep work blocks',
+      'Distraction logging',
+      'Break scheduling (5 min/30 min)',
+      'Focus score tracking',
+    ],
+  },
+  {
+    id: 'gratitude',
+    title: 'Gratitude Journal',
+    emoji: '\u{1F64F}',
+    description: 'Daily gratitude practice for improved mental health.',
+    days: 30,
+    painPoint: 'Negative thinking patterns and lack of appreciation',
+    features: [
+      'Evening gratitude prompts',
+      'Three things I\'m grateful for',
+      'Weekly reflection summaries',
+      'Mood improvement tracking',
+    ],
+  },
+  {
+    id: 'posture',
+    title: 'Posture Correction',
+    emoji: '\u{1F9CD}',
+    description: 'Hourly posture check reminders with stretch exercises.',
+    days: 14,
+    painPoint: 'Back pain from poor sitting posture all day',
+    features: [
+      'Hourly posture check alerts',
+      'Quick stretch exercises',
+      'Desk ergonomics tips',
+      'Streak-based motivation',
+    ],
   },
 ];
 
 const JourneyScreen: React.FC = () => {
   const { theme } = useTheme();
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
+
+  if (showPaywall) {
+    return (
+      <PremiumScreen
+        onClose={() => setShowPaywall(false)}
+        onPurchased={() => {
+          setShowPaywall(false);
+          storage.updateUserPreferences({ isPremium: true });
+          if (selectedJourney) {
+            Alert.alert(
+              'Journey Unlocked!',
+              `You can now start "${selectedJourney.title}". Notifications and reminders will be set up.`,
+            );
+          }
+        }}
+      />
+    );
+  }
+
+  const handleJourneyPress = (journey: Journey) => {
+    setSelectedJourney(journey);
+    Alert.alert(
+      `${journey.emoji} ${journey.title}`,
+      `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nThis is a Premium feature.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlock Premium',
+          onPress: () => setShowPaywall(true),
+        },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -69,7 +209,7 @@ const JourneyScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, { color: theme.colors.text }]}>Journeys</Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Follow guided programs to build lasting habits
+          Guided programs for your biggest pain points
         </Text>
 
         {journeys.map(journey => (
@@ -82,24 +222,26 @@ const JourneyScreen: React.FC = () => {
                 borderColor: theme.colors.border,
               },
             ]}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            onPress={() => handleJourneyPress(journey)}>
             <View style={styles.journeyHeader}>
               <Text style={styles.journeyEmoji}>{journey.emoji}</Text>
               <View style={styles.journeyInfo}>
                 <View style={styles.titleRow}>
-                  <Text style={[styles.journeyTitle, { color: theme.colors.text }]}>
+                  <Text style={[styles.journeyTitle, { color: theme.colors.text }]} numberOfLines={1}>
                     {journey.title}
                   </Text>
-                  {journey.premium && (
-                    <View style={[styles.premiumBadge, { backgroundColor: theme.colors.accent + '20' }]}>
-                      <Text style={[styles.premiumText, { color: theme.colors.accent }]}>
-                        PRO
-                      </Text>
-                    </View>
-                  )}
+                  <View style={[styles.premiumBadge, { backgroundColor: theme.colors.accent + '20' }]}>
+                    <Text style={[styles.premiumText, { color: theme.colors.accent }]}>
+                      {'\u{1F512}'} PRO
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.journeyDesc, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.journeyDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
                   {journey.description}
+                </Text>
+                <Text style={[styles.painPoint, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                  Pain point: {journey.painPoint}
                 </Text>
               </View>
             </View>
@@ -107,9 +249,13 @@ const JourneyScreen: React.FC = () => {
               <Text style={[styles.daysText, { color: theme.colors.textMuted }]}>
                 {journey.days} days
               </Text>
-              <Text style={[styles.startText, { color: theme.colors.primary }]}>
-                {journey.premium ? 'Unlock' : 'Start'}  {'\u{2192}'}
+              <Text style={[styles.startText, { color: theme.colors.accent }]}>
+                Unlock {'\u{2192}'}
               </Text>
+            </View>
+            {/* Locked overlay */}
+            <View style={styles.lockIcon}>
+              <Text style={{ fontSize: 16 }}>{'\u{1F512}'}</Text>
             </View>
           </TouchableOpacity>
         ))}
@@ -122,21 +268,23 @@ const JourneyScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 60 },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 6 },
-  subtitle: { fontSize: 16, marginBottom: 24 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 56 },
+  title: { fontSize: 30, fontWeight: '800', marginBottom: 4 },
+  subtitle: { fontSize: 14, marginBottom: 20 },
   journeyCard: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
     overflow: 'hidden',
+    position: 'relative',
   },
   journeyHeader: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 16,
     alignItems: 'flex-start',
+    opacity: 0.65,
   },
-  journeyEmoji: { fontSize: 40, marginRight: 16 },
+  journeyEmoji: { fontSize: 36, marginRight: 14 },
   journeyInfo: { flex: 1 },
   titleRow: {
     flexDirection: 'row',
@@ -144,23 +292,30 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  journeyTitle: { fontSize: 17, fontWeight: '700' },
+  journeyTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
   premiumBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   premiumText: { fontSize: 10, fontWeight: '800' },
-  journeyDesc: { fontSize: 14, lineHeight: 20 },
+  journeyDesc: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  painPoint: { fontSize: 11, fontStyle: 'italic' },
   journeyFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
+    opacity: 0.65,
   },
-  daysText: { fontSize: 13, fontWeight: '500' },
-  startText: { fontSize: 14, fontWeight: '700' },
+  daysText: { fontSize: 12, fontWeight: '500' },
+  startText: { fontSize: 13, fontWeight: '700' },
+  lockIcon: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
   bottomSpacer: { height: 100 },
 });
 

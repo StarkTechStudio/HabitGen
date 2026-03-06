@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Image } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 interface SplashScreenProps {
@@ -36,8 +36,11 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           styles.logoContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
         ]}>
-        <Text style={styles.logoEmoji}>{'\u{1F525}'}</Text>
-        <Text style={[styles.title, { color: theme.colors.text }]}>HabitGen</Text>
+        <Image
+          source={require('../assets/logo.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Build better habits, one day at a time
         </Text>
@@ -55,14 +58,11 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
   },
-  logoEmoji: {
-    fontSize: 72,
+  logoImage: {
+    width: 160,
+    height: 160,
+    borderRadius: 32,
     marginBottom: 16,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,

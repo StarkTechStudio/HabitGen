@@ -158,7 +158,7 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
           <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: theme.colors.success }]}>
-              {totalMinutes}m
+              {totalMinutes} min
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
               Total Time

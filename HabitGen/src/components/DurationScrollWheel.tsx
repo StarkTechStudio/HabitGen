@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ const ITEM_HEIGHT = 56;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
-// Generate durations from 5 to 180 minutes in 5-min increments
 const durations = Array.from({ length: 36 }, (_, i) => (i + 1) * 5);
 
 interface DurationScrollWheelProps {
@@ -26,12 +25,15 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
 }) => {
   const { theme } = useTheme();
   const listRef = useRef<FlatList>(null);
+  const [currentValue, setCurrentValue] = useState(value);
 
   const onViewable = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const middle = viewableItems[Math.floor(viewableItems.length / 2)];
       if (middle?.item !== undefined) {
-        onChange(middle.item as number);
+        const val = middle.item as number;
+        setCurrentValue(val);
+        onChange(val);
       }
     },
     [onChange],
@@ -52,13 +54,13 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
             borderColor: theme.colors.border,
           },
         ]}>
-        {/* Selection highlight */}
+        {/* Selection highlight bar */}
         <View
           style={[
             styles.selectedOverlay,
             {
-              backgroundColor: theme.colors.primaryLight,
-              borderColor: theme.colors.primary + '30',
+              backgroundColor: theme.colors.primary + '18',
+              borderColor: theme.colors.primary + '50',
             },
           ]}
         />
@@ -67,7 +69,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
           data={durations}
           keyExtractor={item => `dur_${item}`}
           renderItem={({ item }) => {
-            const isSelected = item === value;
+            const isSelected = item === currentValue;
             return (
               <View style={[styles.item, { height: ITEM_HEIGHT }]}>
                 <Text
@@ -78,7 +80,8 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
                         ? theme.colors.primary
                         : theme.colors.textMuted,
                       fontSize: isSelected ? 26 : 18,
-                      fontWeight: isSelected ? '700' : '400',
+                      fontWeight: isSelected ? '800' : '400',
+                      opacity: isSelected ? 1 : 0.5,
                     },
                   ]}>
                   {item} min
@@ -125,17 +128,18 @@ const styles = StyleSheet.create({
   selectedOverlay: {
     position: 'absolute',
     top: ITEM_HEIGHT * 2,
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     height: ITEM_HEIGHT,
     borderRadius: 14,
-    borderWidth: 1,
-    zIndex: -1,
+    borderWidth: 2,
+    zIndex: 1,
   },
   item: {
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
+    zIndex: 2,
   },
   itemText: {
     textAlign: 'center',

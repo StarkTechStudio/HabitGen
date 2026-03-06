@@ -6,12 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useHabits } from '../../context/HabitContext';
 import { getGreeting, getTodayDateString } from '../../utils/helpers';
 import HabitCard from '../../components/HabitCard';
 import { useNavigation } from '@react-navigation/native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const TodayScreen: React.FC = () => {
   const { theme } = useTheme();
@@ -35,18 +38,9 @@ const TodayScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.primary}
-          />
-        }>
-        {/* Header */}
-        <View style={styles.header}>
+      {/* FIXED HEADER - does not scroll */}
+      <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.headerContent}>
           <Text style={[styles.greeting, { color: theme.colors.textSecondary }]}>
             {getGreeting()}
           </Text>
@@ -107,7 +101,7 @@ const TodayScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Habits list */}
+        {/* Section header */}
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Your Habits
@@ -118,7 +112,20 @@ const TodayScreen: React.FC = () => {
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
         </View>
+      </View>
 
+      {/* SCROLLABLE HABITS ONLY */}
+      <ScrollView
+        style={styles.habitsList}
+        contentContainerStyle={styles.habitsContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }>
         {habits.length === 0 ? (
           <View
             style={[
@@ -166,57 +173,63 @@ const TodayScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 60 },
-  header: { marginBottom: 24 },
-  greeting: { fontSize: 16, fontWeight: '500', marginBottom: 4 },
-  title: { fontSize: 32, fontWeight: '800' },
+  fixedHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 4,
+  },
+  headerContent: { marginBottom: 16 },
+  greeting: { fontSize: 15, fontWeight: '500', marginBottom: 2 },
+  title: { fontSize: 30, fontWeight: '800' },
   timerBanner: {
-    padding: 14,
+    padding: 12,
     borderRadius: 14,
-    marginBottom: 16,
+    marginBottom: 14,
     alignItems: 'center',
   },
-  timerBannerText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  timerBannerText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
   statsCard: {
     flexDirection: 'row',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 28,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
   },
   statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
-  statLabel: { fontSize: 12, fontWeight: '500' },
+  statValue: { fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  statLabel: { fontSize: 11, fontWeight: '500' },
   statDivider: { width: 1, marginVertical: 4 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  sectionTitle: { fontSize: 20, fontWeight: '700' },
+  sectionTitle: { fontSize: 18, fontWeight: '700' },
   addButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
-  addButtonText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  addButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  habitsList: { flex: 1 },
+  habitsContent: { paddingHorizontal: 20, paddingTop: 4 },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 36,
     borderRadius: 20,
     borderWidth: 1,
   },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
-  emptyDesc: { fontSize: 14, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  emptyEmoji: { fontSize: 44, marginBottom: 10 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6 },
+  emptyDesc: { fontSize: 13, textAlign: 'center', marginBottom: 18, lineHeight: 18 },
   emptyButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  emptyButtonText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  bottomSpacer: { height: 120 },
+  emptyButtonText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  bottomSpacer: { height: 100 },
 });
 
 export default TodayScreen;

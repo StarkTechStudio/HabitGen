@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Text, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../context/ThemeContext';
 import TodayScreen from '../screens/today/TodayScreen';
@@ -27,6 +27,10 @@ const TabIcon: React.FC<{ routeName: string; focused: boolean }> = ({
 const TabNavigator: React.FC = () => {
   const { theme } = useTheme();
 
+  // On Android, add extra padding to stay above system navigation bar
+  const bottomPadding = Platform.OS === 'android' ? 12 : 28;
+  const tabBarHeight = Platform.OS === 'android' ? 68 : 85;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -35,9 +39,11 @@ const TabNavigator: React.FC = () => {
           backgroundColor: theme.colors.tabBar,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 85,
-          paddingBottom: 28,
-          paddingTop: 10,
+          height: tabBarHeight,
+          paddingBottom: bottomPadding,
+          paddingTop: 8,
+          // Ensure tab bar is above Android system nav buttons
+          ...(Platform.OS === 'android' && { elevation: 8 }),
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.tabBarInactive,

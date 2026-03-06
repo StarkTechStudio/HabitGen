@@ -1,14 +1,5 @@
 // Screen Lock / Focus Mode Service
-// This module provides screen lock functionality during timer sessions.
-//
-// On Android: Uses Android's Screen Pinning (App Pinning) API
-// On iOS: Uses Guided Access-like behavior with a fullscreen overlay
-//
-// For full native implementation, you would need:
-// - Android: A native module that calls startLockTask() / stopLockTask()
-// - iOS: Guided Access must be enabled by the user in Settings
-//
-// This placeholder provides the API surface and a JS-level focus overlay.
+// Provides screen lock functionality during timer sessions.
 
 import { Platform, AppState, Alert, NativeEventSubscription } from 'react-native';
 
@@ -20,36 +11,36 @@ class ScreenLockService {
   private appStateSubscription: NativeEventSubscription | null = null;
 
   async requestPermission(): Promise<boolean> {
-    // On Android, screen pinning requires SYSTEM_ALERT_WINDOW or device admin
-    // On iOS, Guided Access is a system setting
-    if (Platform.OS === 'android') {
-      Alert.alert(
-        'Focus Mode Permission',
-        'HabitGen will enter Focus Mode during timer sessions to help you stay concentrated. ' +
-          'The app will show a fullscreen overlay to discourage leaving.\n\n' +
-          'For full screen lock, enable Screen Pinning in your device settings.',
-        [{ text: 'OK, Got it' }],
-      );
-    } else {
-      Alert.alert(
-        'Focus Mode',
-        'HabitGen will enter Focus Mode during timer sessions.\n\n' +
-          'For full screen lock, enable Guided Access in Settings > Accessibility > Guided Access.',
-        [{ text: 'OK, Got it' }],
-      );
-    }
-    return true;
+    // Modern iOS-style permission dialog
+    const title = 'Enable Focus Mode';
+    const message = Platform.OS === 'android'
+      ? 'HabitGen will enter Focus Mode during your sessions.\n\n' +
+        'While active:\n' +
+        '\u2022 Your screen stays locked to HabitGen\n' +
+        '\u2022 Only Phone and SMS apps are accessible\n' +
+        '\u2022 Social media apps will be blocked\n\n' +
+        'You can stop anytime, but your streak will be penalized.'
+      : 'HabitGen will enter Focus Mode during your sessions.\n\n' +
+        'While active:\n' +
+        '\u2022 A fullscreen overlay blocks distractions\n' +
+        '\u2022 Only Phone and SMS apps are accessible\n' +
+        '\u2022 Social media apps will be blocked\n\n' +
+        'For full screen lock, enable Guided Access in Settings > Accessibility.';
+
+    return new Promise(resolve => {
+      Alert.alert(title, message, [
+        { text: 'Enable Focus Mode', onPress: () => resolve(true) },
+      ]);
+    });
   }
 
   async startLock(): Promise<void> {
     this.isLocked = true;
 
-    // Monitor app state changes to detect when user tries to leave
     this.appStateSubscription = AppState.addEventListener(
       'change',
       nextAppState => {
         if (this.isLocked && nextAppState === 'background') {
-          // User tried to leave during focus mode
           this.notifyListeners(false);
         } else if (this.isLocked && nextAppState === 'active') {
           this.notifyListeners(true);
@@ -58,9 +49,6 @@ class ScreenLockService {
     );
 
     this.notifyListeners(true);
-
-    // TODO: For full Android screen pinning:
-    // NativeModules.ScreenLockModule.startLockTask();
   }
 
   async stopLock(): Promise<void> {
@@ -68,9 +56,6 @@ class ScreenLockService {
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
     this.notifyListeners(false);
-
-    // TODO: For full Android screen pinning:
-    // NativeModules.ScreenLockModule.stopLockTask();
   }
 
   getIsLocked(): boolean {

@@ -14,6 +14,8 @@ import { Habit, DEFAULT_SESSION_PRESETS, Difficulty, Priority } from '../types';
 import { generateId } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
 import DurationScrollWheel from './DurationScrollWheel';
+import PremiumScreen from './PremiumScreen';
+import { storage } from '../utils/storage';
 
 interface CreateHabitFormProps {
   onClose: () => void;
@@ -22,12 +24,13 @@ interface CreateHabitFormProps {
 
 const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit }) => {
   const { theme } = useTheme();
-  const { addHabit, updateHabit } = useHabits();
+  const { addHabit, updateHabit, habits } = useHabits();
   const [name, setName] = useState(editHabit?.name || '');
   const [emoji, setEmoji] = useState(editHabit?.emoji || '\u{1F3AF}');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [selectedPresets, setSelectedPresets] = useState<number[]>(
-    editHabit?.sessionPresets || [30],
+  // Single selection for preset duration
+  const [selectedPreset, setSelectedPreset] = useState<number>(
+    editHabit?.sessionPresets[0] || 30,
   );
   const [customDuration, setCustomDuration] = useState(
     editHabit?.customDuration || 30,
@@ -39,25 +42,30 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
   const [priority, setPriority] = useState<Priority | undefined>(
     editHabit?.priority,
   );
-
-  const togglePreset = (mins: number) => {
-    setSelectedPresets(prev =>
-      prev.includes(mins) ? prev.filter(p => p !== mins) : [...prev, mins],
-    );
-  };
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       Alert.alert('Error', 'Please enter a habit name');
+      return;
+    }
+
+    // Check for duplicate habit name (case insensitive)
+    const isDuplicate = habits.some(
+      h => h.name.toLowerCase() === trimmedName.toLowerCase() && h.id !== editHabit?.id,
+    );
+    if (isDuplicate) {
+      Alert.alert('Duplicate Habit', 'A habit with this name already exists. Please choose a different name.');
       return;
     }
 
     const habit: Habit = {
       id: editHabit?.id || generateId(),
-      name: name.trim(),
+      name: trimmedName,
       emoji,
-      sessionPresets: selectedPresets.length > 0 ? selectedPresets : [30],
-      customDuration,
+      sessionPresets: showCustomWheel ? [customDuration] : [selectedPreset],
+      customDuration: showCustomWheel ? customDuration : selectedPreset,
       difficulty,
       priority,
       createdAt: editHabit?.createdAt || new Date().toISOString(),
@@ -79,6 +87,18 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
           setShowEmojiPicker(false);
         }}
         onClose={() => setShowEmojiPicker(false)}
+      />
+    );
+  }
+
+  if (showPaywall) {
+    return (
+      <PremiumScreen
+        onClose={() => setShowPaywall(false)}
+        onPurchased={() => {
+          setShowPaywall(false);
+          storage.updateUserPreferences({ isPremium: true });
+        }}
       />
     );
   }
@@ -135,7 +155,7 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
           maxLength={50}
         />
 
-        {/* Duration presets */}
+        {/* Duration presets - SINGLE SELECTION */}
         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
           Session Duration
         </Text>
@@ -146,25 +166,28 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
               style={[
                 styles.presetChip,
                 {
-                  backgroundColor: selectedPresets.includes(mins)
+                  backgroundColor: selectedPreset === mins && !showCustomWheel
                     ? theme.colors.primary
                     : theme.colors.surface,
-                  borderColor: selectedPresets.includes(mins)
+                  borderColor: selectedPreset === mins && !showCustomWheel
                     ? theme.colors.primary
                     : theme.colors.border,
                 },
               ]}
-              onPress={() => togglePreset(mins)}>
+              onPress={() => {
+                setSelectedPreset(mins);
+                setShowCustomWheel(false);
+              }}>
               <Text
                 style={[
                   styles.presetText,
                   {
-                    color: selectedPresets.includes(mins)
+                    color: selectedPreset === mins && !showCustomWheel
                       ? '#FFF'
                       : theme.colors.text,
                   },
                 ]}>
-                {mins}m
+                {mins} min
               </Text>
             </TouchableOpacity>
           ))}
@@ -198,67 +221,75 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
           />
         )}
 
-        {/* Difficulty (Premium) */}
+        {/* Difficulty (Premium) - DISABLED, opens paywall on tap */}
         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-          Difficulty {' '}
+          Difficulty{' '}
           <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>
         </Text>
-        <View style={styles.optionsRow}>
-          {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
-            <TouchableOpacity
-              key={d}
-              style={[
-                styles.optionChip,
-                {
-                  backgroundColor:
-                    difficulty === d ? theme.colors.primary : theme.colors.surface,
-                  borderColor:
-                    difficulty === d ? theme.colors.primary : theme.colors.border,
-                },
-              ]}
-              onPress={() => setDifficulty(difficulty === d ? undefined : d)}>
-              <Text
+        <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+          <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+            {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
+              <View
+                key={d}
                 style={[
-                  styles.optionText,
-                  { color: difficulty === d ? '#FFF' : theme.colors.text },
+                  styles.optionChip,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
                 ]}>
-                {d === 'easy' ? '\u{1F7E2}' : d === 'medium' ? '\u{1F7E1}' : '\u{1F534}'}{' '}
-                {d.charAt(0).toUpperCase() + d.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.optionText,
+                    { color: theme.colors.textMuted },
+                  ]}>
+                  {d === 'easy' ? '\u{1F7E2}' : d === 'medium' ? '\u{1F7E1}' : '\u{1F534}'}{' '}
+                  {d.charAt(0).toUpperCase() + d.slice(1)}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
+            <Text style={[styles.lockText, { color: theme.colors.accent }]}>
+              {'\u{1F512}'} Upgrade to PRO to unlock
+            </Text>
+          </View>
+        </TouchableOpacity>
 
-        {/* Priority (Premium) */}
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-          Priority {' '}
+        {/* Priority (Premium) - DISABLED, opens paywall on tap */}
+        <Text style={[styles.label, { color: theme.colors.textSecondary, marginTop: 8 }]}>
+          Priority{' '}
           <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>
         </Text>
-        <View style={styles.optionsRow}>
-          {(['low', 'medium', 'high'] as Priority[]).map(p => (
-            <TouchableOpacity
-              key={p}
-              style={[
-                styles.optionChip,
-                {
-                  backgroundColor:
-                    priority === p ? theme.colors.primary : theme.colors.surface,
-                  borderColor:
-                    priority === p ? theme.colors.primary : theme.colors.border,
-                },
-              ]}
-              onPress={() => setPriority(priority === p ? undefined : p)}>
-              <Text
+        <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+          <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+            {(['low', 'medium', 'high'] as Priority[]).map(p => (
+              <View
+                key={p}
                 style={[
-                  styles.optionText,
-                  { color: priority === p ? '#FFF' : theme.colors.text },
+                  styles.optionChip,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
                 ]}>
-                {p === 'low' ? '\u{2B07}\u{FE0F}' : p === 'medium' ? '\u{27A1}\u{FE0F}' : '\u{2B06}\u{FE0F}'}{' '}
-                {p.charAt(0).toUpperCase() + p.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.optionText,
+                    { color: theme.colors.textMuted },
+                  ]}>
+                  {p === 'low' ? '\u{2B07}\u{FE0F}' : p === 'medium' ? '\u{27A1}\u{FE0F}' : '\u{2B06}\u{FE0F}'}{' '}
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
+            <Text style={[styles.lockText, { color: theme.colors.accent }]}>
+              {'\u{1F512}'} Upgrade to PRO to unlock
+            </Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -315,7 +346,7 @@ const styles = StyleSheet.create({
   optionsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   optionChip: {
     flex: 1,
@@ -325,6 +356,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionText: { fontSize: 13, fontWeight: '600' },
+  lockOverlay: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  lockText: { fontSize: 13, fontWeight: '700' },
 });
 
 export default CreateHabitForm;

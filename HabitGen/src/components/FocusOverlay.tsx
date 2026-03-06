@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   Animated,
   Dimensions,
   BackHandler,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { screenLock } from '../api/screenlock';
 
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const RING_SIZE = SCREEN_WIDTH * 0.58;
 
 interface FocusOverlayProps {
   isActive: boolean;
@@ -29,26 +31,45 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
   onRequestStop,
 }) => {
   const { theme } = useTheme();
-  const [opacity] = useState(new Animated.Value(0));
+  const opacity = useRef(new Animated.Value(0)).current;
+  const ringRotate = useRef(new Animated.Value(0)).current;
+  const pulseScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (isActive) {
       screenLock.startLock();
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 300,
+        duration: 400,
         useNativeDriver: true,
       }).start();
 
-      // Prevent hardware back button on Android
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-        // Don't allow going back during focus mode
-        return true;
-      });
+      // Rotating ring animation
+      const rotate = Animated.loop(
+        Animated.timing(ringRotate, {
+          toValue: 1,
+          duration: 8000,
+          useNativeDriver: true,
+        }),
+      );
+      rotate.start();
+
+      // Subtle pulse
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseScale, { toValue: 1.03, duration: 2000, useNativeDriver: true }),
+          Animated.timing(pulseScale, { toValue: 1, duration: 2000, useNativeDriver: true }),
+        ]),
+      );
+      pulse.start();
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
 
       return () => {
         backHandler.remove();
         screenLock.stopLock();
+        rotate.stop();
+        pulse.stop();
       };
     } else {
       Animated.timing(opacity, {
@@ -57,34 +78,89 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
         useNativeDriver: true,
       }).start();
     }
-  }, [isActive, opacity]);
+  }, [isActive, opacity, ringRotate, pulseScale]);
 
   if (!isActive) return null;
 
+  const spin = ringRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return (
     <Animated.View style={[styles.overlay, { opacity }]}>
-      <View style={[styles.content, { backgroundColor: theme.colors.background }]}>
-        <Text style={styles.emoji}>{habitEmoji}</Text>
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          Focus Mode Active
-        </Text>
-        <Text style={[styles.habitName, { color: theme.colors.primary }]}>
-          {habitName}
-        </Text>
-        <Text style={[styles.timer, { color: theme.colors.text }]}>
-          {timeRemaining}
-        </Text>
-        <Text style={[styles.message, { color: theme.colors.textSecondary }]}>
-          Stay focused! Leaving now will penalize your streak.
-        </Text>
+      <View style={[styles.content, { backgroundColor: '#000' }]}>
+        {/* iOS-style status pill */}
+        <View style={styles.statusPill}>
+          <View style={[styles.liveDot, { backgroundColor: '#34C759' }]} />
+          <Text style={styles.statusText}>Focus Mode Active</Text>
+        </View>
 
-        <TouchableOpacity
-          style={[styles.stopButton, { borderColor: theme.colors.error }]}
-          onPress={onRequestStop}>
-          <Text style={[styles.stopText, { color: theme.colors.error }]}>
-            Emergency Stop
+        {/* Center timer display */}
+        <View style={styles.centerContent}>
+          {/* Animated gradient ring */}
+          <Animated.View
+            style={[
+              styles.outerRing,
+              {
+                transform: [{ rotate: spin }],
+              },
+            ]}>
+            <View style={[styles.ringSegment, styles.ringTop, { backgroundColor: theme.colors.primary }]} />
+            <View style={[styles.ringSegment, styles.ringRight, { backgroundColor: theme.colors.primary + '60' }]} />
+            <View style={[styles.ringSegment, styles.ringBottom, { backgroundColor: theme.colors.primary + '30' }]} />
+            <View style={[styles.ringSegment, styles.ringLeft, { backgroundColor: theme.colors.primary + '15' }]} />
+          </Animated.View>
+
+          {/* Timer island */}
+          <Animated.View
+            style={[
+              styles.timerIsland,
+              {
+                backgroundColor: '#1C1C1E',
+                transform: [{ scale: pulseScale }],
+              },
+            ]}>
+            <Text style={styles.islandEmoji}>{habitEmoji}</Text>
+            <Text style={styles.islandTimer}>{timeRemaining}</Text>
+            <Text style={[styles.islandLabel, { color: theme.colors.primary }]}>
+              {habitName}
+            </Text>
+          </Animated.View>
+        </View>
+
+        {/* Allowed apps section */}
+        <View style={styles.infoSection}>
+          <View style={[styles.infoCard, { backgroundColor: '#1C1C1E' }]}>
+            <Text style={styles.infoTitle}>Allowed during focus</Text>
+            <View style={styles.allowedRow}>
+              <View style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
+                <Text style={styles.allowedText}>{'\u{1F4DE}'} Phone</Text>
+              </View>
+              <View style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
+                <Text style={styles.allowedText}>{'\u{1F4AC}'} SMS</Text>
+              </View>
+            </View>
+            <View style={[styles.blockedRow, { backgroundColor: '#3A1A1A', borderRadius: 10, padding: 8, marginTop: 6 }]}>
+              <Text style={styles.blockedText}>
+                {'\u{1F6AB}'} Social media apps are blocked
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom section */}
+        <View style={styles.bottomSection}>
+          <Text style={styles.warningText}>
+            Stopping early will penalize your streak by 1 day
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.stopButton}
+            onPress={onRequestStop}
+            activeOpacity={0.7}>
+            <Text style={styles.stopText}>Stop Timer & Unlock Screen</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Animated.View>
   );
@@ -102,27 +178,113 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: Platform.OS === 'ios' ? 58 : 44,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    color: '#8E8E93',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  centerContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
   },
-  emoji: { fontSize: 72, marginBottom: 20 },
-  title: { fontSize: 24, fontWeight: '800', marginBottom: 8 },
-  habitName: { fontSize: 20, fontWeight: '600', marginBottom: 24 },
-  timer: { fontSize: 56, fontWeight: '800', marginBottom: 24, fontVariant: ['tabular-nums'] },
-  message: {
-    fontSize: 15,
+  outerRing: {
+    position: 'absolute',
+    width: RING_SIZE + 16,
+    height: RING_SIZE + 16,
+    borderRadius: (RING_SIZE + 16) / 2,
+    borderWidth: 3,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+  },
+  ringSegment: {
+    position: 'absolute',
+    width: '50%',
+    height: '50%',
+  },
+  ringTop: { top: 0, left: 0, borderTopLeftRadius: (RING_SIZE + 16) / 2 },
+  ringRight: { top: 0, right: 0, borderTopRightRadius: (RING_SIZE + 16) / 2 },
+  ringBottom: { bottom: 0, right: 0, borderBottomRightRadius: (RING_SIZE + 16) / 2 },
+  ringLeft: { bottom: 0, left: 0, borderBottomLeftRadius: (RING_SIZE + 16) / 2 },
+  timerIsland: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: RING_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  islandEmoji: { fontSize: 44, marginBottom: 8 },
+  islandTimer: {
+    fontSize: 48,
+    fontWeight: '200',
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 3,
+  },
+  islandLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  infoSection: {
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  infoCard: {
+    borderRadius: 16,
+    padding: 16,
+  },
+  infoTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginBottom: 10,
+  },
+  allowedRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  allowedChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  allowedText: { fontSize: 13, fontWeight: '600', color: '#34C759' },
+  blockedRow: {},
+  blockedText: { fontSize: 13, fontWeight: '600', color: '#FF453A' },
+  bottomSection: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 32,
+    alignItems: 'center',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#636366',
+    marginBottom: 14,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 40,
   },
   stopButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
+    width: '100%',
+    paddingVertical: 16,
     borderRadius: 14,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: '#FF453A40',
+    backgroundColor: '#FF453A10',
+    alignItems: 'center',
   },
-  stopText: { fontSize: 16, fontWeight: '700' },
+  stopText: { fontSize: 16, fontWeight: '600', color: '#FF453A' },
 });
 
 export default FocusOverlay;
