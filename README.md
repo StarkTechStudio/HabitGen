@@ -1,2 +1,0 @@
-# HabitGen
-Habit Tracker - HabitGen

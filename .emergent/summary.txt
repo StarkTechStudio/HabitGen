@@ -1,0 +1,155 @@
+<analysis>**original_problem_statement:**
+The user wants to build a habit-tracking Android and iOS application named HabitGen.
+
+The initial request was for a native Android (Kotlin) app, which then pivoted to a React Native Expo app. The user has now made a final, major pivot to a **pure React Native CLI project**, which should generate  and  build folders. The user also provided a detailed list of 10 new features and modifications, including complex native functionalities like screen locking during timer sessions.
+
+**PRODUCT REQUIREMENTS:**
+- **App:** HabitGen, a goal-based habit tracker.
+- **Platform:** React Native CLI (with  and  folders).
+- **Core Loop:** Users create habits, track streaks (🔥 emoji), run timers, and follow premium journeys.
+- **Navigation (4 Tabs):** Today (dashboard), Journey (premium content), History (graphs, logs), Account (profile, settings, login).
+- **Onboarding:** First-time users set wake-up/bed times and select initial goals.
+- **Timer System:** Pomodoro-style timers for habits. The screen should lock during a session, allowing only essential apps. A break system (5 mins per 30 mins) is required. Stopping a timer early should penalize the user's streak.
+- **New UI/UX Features:**
+    - Dark/Light mode toggle.
+    - Apple-style scroll wheel for custom timer selection.
+    - Full emoji picker for custom habits.
+- **Premium Features:** Allow users to set difficulty and priority for habits.
+- **Monetization:** RevenueCat (placeholder) for a premium tier and Google AdMob (test IDs) for ads in the free tier.
+- **Backend:** None. This is a frontend-only native app.
+- **Auth/Sync:** Supabase for optional user login and data synchronization, accessible from the Account screen.
+
+**User's preferred language**: English
+
+**what currently exists?**
+The workspace is currently empty. The previous agent correctly interpreted the user's request for a complete project overhaul and executed  to delete the old React Native Expo project. The project is now ready to be rebuilt from scratch as a pure React Native CLI application.
+
+**Last working item**:
+- **Last item agent was working**: The agent was preparing to initialize a brand new React Native CLI project after deleting the previous Expo-based application.
+- **Status**: NOT STARTED
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: After the initial build of the app's core structure and screens, use the **frontend testing agent** to run a comprehensive test suite. For verifying native features like screen locking, manual testing will be required, guided by the agent.
+- **User Testing Done**: N
+
+**All Pending/In progress Issue list**:
+There are no pending bugs. The entire project is a fresh start. The issues are the new features requested by the user, which are listed in the Upcoming and Future Tasks section.
+
+**In progress Task List**:
+- **Task 1: Project Initialization** (Priority: P0)
+    - **Where to resume**: The workspace is empty. The immediate next step is to create the React Native CLI project using .
+    - **What will be achieved with this?**: A foundational React Native CLI project structure will be created, including the  and  directories requested by the user.
+    - **Status**: NOT STARTED
+    - **Should Test frontend/backend/both after fix?**: NA
+    - **Blocked on something**: No.
+
+**Upcoming and Future Tasks**
+- **P0: Core App Scaffolding**
+    - Implement the Splash Screen.
+    - Build the multi-step onboarding flow (wake-up/bed time, goal selection).
+    - Set up the 4-tab bottom navigation (, , , ).
+    - Create the basic UI for all primary screens.
+    - Integrate Supabase for optional authentication.
+    - Set up local persistence using AsyncStorage for habits, streaks, and settings.
+- **P1: New Feature Implementation (per user request)**
+    1.  **Screen Lock & Permissions**: Implement a screen lock feature during timer sessions. This will require asking for specific permissions and potentially using native modules to control app access. Show a warning popup before the timer starts.
+    2.  **Timer Logic Overhaul**:
+        - Remove / buttons during the timer.
+        - Implement the stop functionality on the lock screen, which warns the user and penalizes their streak if used.
+        - Add the 5-minute break option for every 30 minutes of the timer.
+    3.  **Habit Management**:
+        - Disable the  and  buttons for a habit while its timer is running.
+        - Add premium-only features:  and  for habits.
+    4.  **UI/UX Enhancements**:
+        - Implement a  mode toggle in the Account screen.
+        - Add a full emoji selector for custom habits.
+        - When creating a habit, pre-populate session durations (15, 30, 45, 60 mins) and include an Apple-style scroll wheel for custom time selection.
+
+**Completed work in this session**
+- A complete React Native application (initially CRA/FastAPI, then Expo) was built, featuring onboarding, a 4-tab dashboard, and basic functionality.
+- **This entire project was subsequently discarded at the user's request.**
+
+**Earlier issues found/mentioned but not fixed**
+- A navigation issue was detected by the testing agent in the previous (now deleted) Expo app. The agent's fix was not re-verified by the testing agent before the project was scrapped. This issue is no longer relevant.
+
+**Known issue recurrence from previous fork**
+- None.
+
+**Code Architecture**
+A new React Native CLI project will be created. The expected structure will be:
+
+
+**Key Technical Concepts**
+- **Framework**: React Native CLI
+- **Language**: TypeScript
+- **State Management**: React Context / Hooks
+- **Navigation**: React Navigation
+- **Local Storage**: AsyncStorage
+- **Authentication**: Supabase Client
+- **Native Modules**: Required for the screen locking feature.
+
+**key DB schema**
+The data will be stored locally using AsyncStorage, following this schema:
+- **UserPreferences**: 
+- **Habits**: 
+- **HabitSessions**: 
+- **Streaks**: 
+
+**changes in tech stack**
+- **Complete pivot**: The project has shifted from a web-based React/Expo app to a **pure React Native CLI** application. The backend has been completely removed.
+
+**All files of reference**
+- None. The project directory was wiped clean and will be recreated.
+
+**Areas that need refactoring**:
+- Not applicable, as the project is starting from a clean slate.
+
+**key api endpoints**
+- The app will not have its own backend API. It will communicate directly with Supabase for authentication and data synchronization.
+
+**Critical Info for New Agent**
+- **This is a complete project rewrite.** Do not attempt to use any code or logic from the previous Expo application. Your first task is to initialize a new React Native CLI project.
+- **Focus on the 10 new user requirements.** The most complex new feature is the **screen locking mechanism** during timers. This will likely require research into native modules or third-party libraries that provide this functionality. Plan for this complexity.
+- The project is **frontend-only (native app)**. There is no backend to build or maintain.
+- The user has explicitly asked for  and  folders, confirming the need for a React Native CLI project, not Expo.
+
+**documents and test reports created in this job**
+- 
+- 
+- 
+*(Note: These documents pertain to the old, deleted project and should be considered obsolete. A new PRD should be created.)*
+
+**Last 10 User Messages and any pending HUMAN messages**
+- **User (Message 193):** Provided 10 detailed requirements for a major pivot, including screen locking, new timer logic, difficulty/priority settings, UI changes (dark/light mode, scroll wheel), and specified a react native app that will have iOS and android folder.
+- **Agent (Message 194):** Asked clarifying questions about permissions, project type (CLI vs. Expo), the apple style clock, emoji options, and light mode.
+- **User (Message 196):** Confirmed key decisions:
+    - Ask for lock screen permission after app install.
+    - The project must be a Pure react native cli project that should have ios and android folder and builds.
+    - The timer selector should be a Scroll wheel.
+    - yes show full emojis.
+    - for light mode keep that looking good for the UI.
+- **Agent (Message 197):** Acknowledged the major rewrite and confirmed it would start over.
+- **Agent (Message 198):** Executed  to delete the old project and clear the workspace for the new build.
+
+**Project Health Check:**
+- **Broken**: The application does not exist. The workspace has been intentionally cleared for a complete rewrite.
+- **Mocked**: RevenueCat and Google AdMob integrations will use placeholders and test IDs as requested.
+
+**3rd Party Integrations**
+- **Supabase**: For user authentication and optional data sync.
+  - URL: 
+  - Anon Key: 
+- **RevenueCat**: For premium subscriptions (using placeholder).
+- **Google AdMob**: For ads in the free tier (using test ID).
+
+**Testing status**
+- **Testing agent used after significant changes**: NO (for the new project)
+- **Troubleshoot agent used after agent stuck in loop**: NO
+- **Test files created**: None currently.
+- **Known regressions**: None, as the project is being built from scratch.
+
+**Credentials to test flow:**
+- **Supabase URL**: 
+- **Supabase Anon Key**: 
+
+**What agent forgot to execute**
+The previous agent correctly identified the need for a full rewrite and cleared the workspace. It has not yet had a chance to execute the new plan, so nothing has been forgotten at this stage.</analysis>
