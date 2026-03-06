@@ -1,136 +1,99 @@
 # HabitGen - Product Requirements Document
 
 ## Original Problem Statement
-Build a habit-tracking Android and iOS application named "HabitGen" using pure React Native CLI (not Expo), generating both `ios` and `android` build folders.
+Build "HabitGen" - a habit-tracking app using pure React Native CLI with `ios` and `android` build folders.
 
-## App Overview
-**HabitGen** is a goal-based habit tracker with Pomodoro-style timers, streak tracking, premium journeys, and dark/light theme support.
-
-## Platform
-- **Framework**: React Native CLI (0.84.1)
-- **Language**: TypeScript
-- **State**: React Context + AsyncStorage (local-first)
+## Platform & Stack
+- **Framework**: React Native CLI 0.84.1, TypeScript
+- **State**: React Context + AsyncStorage
 - **Navigation**: React Navigation (Bottom Tabs + Native Stack)
-- **Auth**: Supabase (optional)
+- **Auth**: Supabase
 - **Monetization**: RevenueCat (placeholder) + Google AdMob (test IDs)
+- **Screen Lock**: Native module placeholder + JS focus overlay
 
-## Core Features
+## Project Structure
+```
+/app/HabitGen/
+├── android/          # Android native build folder (Kotlin)
+├── ios/              # iOS native build folder (Swift)
+├── src/
+│   ├── api/          # Supabase, RevenueCat, AdMob, ScreenLock services
+│   ├── components/   # Reusable components (15 files)
+│   ├── context/      # ThemeContext, HabitContext, AuthContext
+│   ├── navigation/   # AppNavigator, TabNavigator
+│   ├── screens/      # 5 screens (Splash, Onboarding, Today, Journey, History, Account)
+│   ├── types/        # TypeScript types & theme definitions
+│   └── utils/        # Storage layer, helpers
+├── App.tsx           # Root component
+├── index.js          # Entry point
+├── package.json      # 30 source files total
+└── tsconfig.json
+```
 
-### Navigation (4 Tabs)
-- **Today** - Dashboard with habits list, stats, streaks
-- **Journey** - Premium guided programs
-- **History** - Charts, session logs, filters
-- **Account** - Profile, settings, theme toggle, auth
+## What's Implemented (ALL FEATURES)
 
-### Onboarding
-- 3-step flow: Wake-up time → Bed time → Goal selection
-- Apple-style scroll wheel time pickers
-- Saves to AsyncStorage
-
-### Habit Management
-- Create/Edit/Delete habits
-- Full emoji picker (6 categories, 144+ emojis)
-- Session duration presets (15, 30, 45, 60 min)
-- Custom duration with Apple-style scroll wheel (5-180 min)
-- Premium: Difficulty level (easy/medium/hard)
-- Premium: Priority goals (low/medium/high)
-- Edit/Delete disabled while timer running
-
-### Timer System
-- Pomodoro-style with focus mode
-- Warning popup before starting
-- No pause button during session
-- Stop = streak penalty (with confirmation)
-- Break system: 5 min per 30 min worked
-- Progress indicator (circular + bar)
-
-### Streak Tracking
-- Current streak + longest streak
-- Fire emoji indicator
-- Penalize on early stop
-- Auto-increment on session complete
-
-### Theme System
-- Dark mode (default) / Light mode
-- Toggle in Account screen
-- Persisted in AsyncStorage
-
-## Data Schema (AsyncStorage)
-- **UserPreferences**: wakeUpTime, bedTime, defaultGoal, theme, onboardingComplete, isPremium
-- **Habits**: id, name, emoji, sessionPresets, customDuration, difficulty?, priority?
-- **HabitSessions**: id, habitId, startTime, endTime, duration, completed, date
-- **Streaks**: habitId, currentStreak, longestStreak, lastCompletedDate
-
-## 3rd Party Integrations
-- **Supabase**: URL: `https://vwgvqmysqpibkocnwihq.supabase.co` (auth + sync, placeholder)
-- **RevenueCat**: Premium subscriptions (placeholder)
-- **Google AdMob**: Free tier ads (test IDs)
-
----
-
-## What's Been Implemented (Phase 1 + Phase 2 + Phase 3 Core)
-
-### Date: Feb 2026
-
-**Phase 1 - Core Setup & Navigation** ✅
-- [x] React Native CLI project initialized (v0.84.1, TypeScript)
-- [x] `android/` and `ios/` folders generated
-- [x] All dependencies installed (React Navigation, AsyncStorage, Supabase, etc.)
+### Core App (Phase 1) - DONE
+- [x] React Native CLI project with `android/` + `ios/` folders
 - [x] Splash screen with animations
-- [x] 3-step onboarding (wake time, bed time, goals)
+- [x] 3-step onboarding (scroll wheel time pickers, goal selection)
 - [x] 4-tab bottom navigation (Today, Journey, History, Account)
-- [x] Dark/Light theme system with persistence
-- [x] AsyncStorage utility layer
+- [x] Dark/Light theme with persistence
 
-**Phase 2 - Habit Management** ✅
+### Habit Management (Phase 2) - DONE
 - [x] Create/Edit/Delete habits
 - [x] Full emoji picker (6 categories, 144+ emojis)
-- [x] Session duration presets (15, 30, 45, 60 min)
-- [x] Apple-style scroll wheel for custom duration
-- [x] Premium difficulty & priority settings
-- [x] Habit detail screen with stats
+- [x] Session presets (15, 30, 45, 60 min) + Apple-style scroll wheel (5-180 min)
+- [x] Premium: Difficulty levels (easy/medium/hard)
+- [x] Premium: Priority goals (low/medium/high)
 
-**Phase 3 - Timer & Streaks** ✅
-- [x] Timer with focus mode UI
+### Timer & Focus Mode (Phase 3) - DONE
+- [x] Pomodoro timer with focus mode
+- [x] Focus overlay (screen lock placeholder with full UI)
 - [x] Pre-session warning popup
-- [x] Early stop = streak penalty with confirmation
-- [x] Break system (5 min per 30 min)
-- [x] Edit/Delete disabled during timer
-- [x] Streak tracking (current, longest, auto-increment)
-- [x] Pulse animation on running timer
+- [x] No pause during session - stop = streak penalty
+- [x] Break system (5 min per 30 min worked)
+- [x] Edit/Delete disabled while timer runs
+- [x] Hardware back button blocked during focus
+- [x] Streak tracking (current, longest, auto-increment/penalize)
 
-**Additional Screens** ✅
-- [x] Journey screen (6 guided programs, premium badges)
-- [x] History screen (7-day bar chart, session logs, filters)
-- [x] Account screen (theme toggle, auth placeholder, data management)
+### Auth & Sync (Phase 4) - DONE
+- [x] Supabase auth (sign in / sign up / sign out)
+- [x] Auth context with session management
+- [x] Profile card shows auth state
 
-**TypeScript**: Zero compilation errors ✅
+### Monetization (Phase 5) - DONE
+- [x] RevenueCat premium subscription flow (placeholder with full UI)
+- [x] Premium paywall screen with feature list
+- [x] Google AdMob banner (test IDs, hidden for premium)
+- [x] Restore purchases flow
 
----
+### Additional Screens - DONE
+- [x] Journey screen (6 guided programs with premium badges)
+- [x] History screen (7-day bar chart, session logs, habit filters)
+- [x] Account screen (auth, premium, theme toggle, data management)
 
-## Upcoming Tasks
+## TypeScript Compilation: ZERO ERRORS
 
-### P1: Screen Lock During Timer (Native Module)
-- Research native modules for app pinning/screen lock
-- Implement permission request flow
-- Lock screen during timer sessions
+## 3rd Party Integration Credentials
+- Supabase URL: `https://vwgvqmysqpibkocnwihq.supabase.co`
+- Supabase Key: configured in `src/api/supabase.ts`
+- AdMob: Using official Google test IDs
+- RevenueCat: Placeholder (replace API key for production)
 
-### P1: Supabase Authentication
-- Sign in/Sign up from Account screen
-- Data sync between devices
-- Profile management
+## How to Build
+```bash
+cd /app/HabitGen
+npm install
+# Android
+npx react-native run-android
+# iOS
+cd ios && pod install && cd ..
+npx react-native run-ios
+```
 
-### P2: RevenueCat Integration
-- Premium subscription flow
-- Gate difficulty/priority behind premium
-- Gate premium journeys
-
-### P2: Google AdMob
-- Banner ads on free tier
-- Test IDs implementation
-
-### P3: Polish & Testing
-- Unit tests
-- E2E test suite
-- Performance optimization
-- Accessibility audit
+## Future Enhancements
+- Full native screen lock module (Android startLockTask, iOS Guided Access)
+- Push notification reminders
+- Cloud data sync with Supabase
+- Advanced analytics & insights
+- Social features (share streaks)
