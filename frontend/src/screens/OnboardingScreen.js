@@ -13,7 +13,7 @@ const HOURS_PM = [20,21,22,23,0,1,2].map(h => ({
   label: `${h === 0 ? 12 : h > 12 ? h-12 : h}:00 ${h < 12 && h !== 0 ? 'AM' : 'PM'}`
 }));
 
-export default function OnboardingScreen({ navigation }) {
+export default function OnboardingScreen() {
   const { savePreferences, addHabit } = useApp();
   const [step, setStep] = useState(0);
   const [wakeUp, setWakeUp] = useState('07:00');
@@ -33,12 +33,13 @@ export default function OnboardingScreen({ navigation }) {
   };
 
   const finish = () => {
-    savePreferences({ wakeUpTime: wakeUp, bedTime, goals, defaultGoal: primary || goals[0] });
+    // Add habits first
     goals.forEach(gid => {
       const g = CATEGORIES.find(c => c.id === gid);
       if (g && g.id !== 'custom') addHabit({ name: g.name, category: gid, timerDuration: 2700, breakDuration: 300 });
     });
-    navigation.replace('Main');
+    // Save preferences (triggers re-render in AppNavigator to show tabs)
+    savePreferences({ wakeUpTime: wakeUp, bedTime, goals, defaultGoal: primary || goals[0] });
   };
 
   const canNext = step < 2 || goals.length > 0;
@@ -46,7 +47,6 @@ export default function OnboardingScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} testID="onboarding-screen">
       <View style={styles.container}>
-        {/* Progress bar */}
         <View style={styles.progress}>
           {[0,1,2].map(i => <View key={i} style={[styles.bar, i <= step && styles.barActive]} />)}
         </View>
@@ -118,7 +118,6 @@ export default function OnboardingScreen({ navigation }) {
           )}
         </ScrollView>
 
-        {/* Nav buttons */}
         <View style={styles.nav}>
           {step > 0 && (
             <TouchableOpacity style={styles.backBtn} onPress={() => setStep(s => s-1)} testID="onboarding-back">

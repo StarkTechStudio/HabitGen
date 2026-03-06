@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { C } from '../constants/theme';
@@ -12,9 +11,7 @@ import JourneyScreen from '../screens/JourneyScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import AccountScreen from '../screens/AccountScreen';
 
-const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
 const TAB_ICONS = { Today: 'target', Journey: 'map', History: 'clock', Account: 'user' };
 
 function TabNavigator() {
@@ -55,15 +52,24 @@ function TabNavigator() {
 
 export default function AppNavigator() {
   const { preferences, loading } = useApp();
+  const [splashDone, setSplashDone] = useState(false);
+
   if (loading) return null;
 
+  // Show splash screen first
+  if (!splashDone) {
+    return <SplashScreen onDone={() => setSplashDone(true)} />;
+  }
+
+  // Show onboarding if not completed
+  if (!preferences?.onboardingDone) {
+    return <OnboardingScreen />;
+  }
+
+  // Main app with tab navigation
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ gestureEnabled: false }} />
-        <Stack.Screen name="Main" component={TabNavigator} options={{ gestureEnabled: false }} />
-      </Stack.Navigator>
+      <TabNavigator />
     </NavigationContainer>
   );
 }

@@ -2,21 +2,12 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { C } from '../constants/theme';
-import { useApp } from '../context/AppContext';
 
-export default function SplashScreen({ navigation }) {
-  const { preferences } = useApp();
-
+export default function SplashScreen({ onDone }) {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (preferences?.onboardingDone) {
-        navigation.replace('Main');
-      } else {
-        navigation.replace('Onboarding');
-      }
-    }, 2500);
+    const timer = setTimeout(() => onDone(), 2500);
     return () => clearTimeout(timer);
-  }, [navigation, preferences]);
+  }, [onDone]);
 
   return (
     <View style={styles.container} testID="splash-screen">
