@@ -1,74 +1,61 @@
-import { BookOpen, Code, Moon, Lightbulb, Bike, Camera, Dumbbell, Star, Play, Check, Trash2 } from 'lucide-react';
-
-const ICONS = {
-  study: BookOpen, coding: Code, sleeping: Moon, learning: Lightbulb,
-  ride: Bike, content: Camera, workout: Dumbbell, custom: Star,
-};
-const COLORS = {
-  study: '#f97316', coding: '#3b82f6', sleeping: '#a855f7', learning: '#eab308',
-  ride: '#22c55e', content: '#ec4899', workout: '#ef4444', custom: '#a1a1aa',
-};
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { C, getCategoryColor, getCategoryIcon } from '../constants/theme';
 
 export default function HabitCard({ habit, streak, completedToday, onStartTimer, onComplete, onDelete }) {
-  const Icon = ICONS[habit.category] || Star;
-  const color = COLORS[habit.category] || '#a1a1aa';
+  const color = getCategoryColor(habit.category);
+  const icon = getCategoryIcon(habit.category);
 
   return (
-    <div
-      data-testid={`habit-card-${habit.id}`}
-      className="flex items-center gap-3 p-4 glass-card rounded-2xl mb-3 transition-all duration-200 active:scale-[0.98] hover:border-orange-500/20"
-    >
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-        style={{ backgroundColor: color + '20' }}
-      >
-        <Icon size={20} style={{ color }} />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-semibold text-sm truncate">{habit.name}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {streak > 0 && (
-            <span className="flex items-center gap-0.5 text-xs">
-              <span className="animate-flicker inline-block">&#x1F525;</span>
-              <span className="fire-text font-bold">{streak} day{streak !== 1 ? 's' : ''}</span>
-            </span>
-          )}
-          {streak === 0 && <span className="text-zinc-500 text-xs">No streak yet</span>}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 shrink-0">
-        {!completedToday ? (
-          <button
-            data-testid={`complete-habit-${habit.id}`}
-            onClick={onComplete}
-            className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:bg-green-600 hover:border-green-500 transition-all"
-          >
-            <Check size={16} className="text-zinc-400 hover:text-white" />
-          </button>
+    <View style={styles.card} testID={`habit-card-${habit.id}`}>
+      <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
+        <Feather name={icon} size={20} color={color} />
+      </View>
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={1}>{habit.name}</Text>
+        {streak > 0 ? (
+          <Text style={styles.streak}>
+            <Text style={styles.fire}>&#x1F525; </Text>
+            <Text style={styles.streakNum}>{streak} day{streak !== 1 ? 's' : ''}</Text>
+          </Text>
         ) : (
-          <div className="w-9 h-9 rounded-full bg-green-600/20 border border-green-500/30 flex items-center justify-center">
-            <Check size={16} className="text-green-400" />
-          </div>
+          <Text style={styles.noStreak}>No streak yet</Text>
         )}
-        <button
-          data-testid={`start-timer-${habit.id}`}
-          onClick={onStartTimer}
-          className="w-9 h-9 rounded-full fire-gradient flex items-center justify-center shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:opacity-90 transition-all"
-        >
-          <Play size={14} className="text-white ml-0.5" fill="white" />
-        </button>
-        <button
-          data-testid={`delete-habit-${habit.id}`}
-          onClick={onDelete}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
+      </View>
+      <View style={styles.actions}>
+        {!completedToday ? (
+          <TouchableOpacity style={styles.checkBtn} onPress={onComplete} testID={`complete-habit-${habit.id}`}>
+            <Feather name="check" size={16} color={C.textDim} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.doneBtn}>
+            <Feather name="check" size={16} color={C.secondary} />
+          </View>
+        )}
+        <TouchableOpacity style={styles.playBtn} onPress={onStartTimer} testID={`start-timer-${habit.id}`}>
+          <Feather name="play" size={14} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.delBtn} onPress={onDelete} testID={`delete-habit-${habit.id}`}>
+          <Feather name="trash-2" size={14} color={C.textFaint} />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
-export { ICONS, COLORS };
+const styles = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: 'rgba(9,9,11,0.6)', borderWidth: 1, borderColor: C.borderLight, borderRadius: 18, marginBottom: 10 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  info: { flex: 1 },
+  name: { color: C.text, fontSize: 14, fontWeight: '600' },
+  streak: { flexDirection: 'row', marginTop: 2 },
+  fire: { fontSize: 12 },
+  streakNum: { fontSize: 12, fontWeight: '700', color: C.primary },
+  noStreak: { fontSize: 11, color: C.textFaint, marginTop: 2 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  checkBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surfaceHl, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  doneBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(34,197,94,0.15)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)', alignItems: 'center', justifyContent: 'center' },
+  playBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: C.primary },
+  delBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+});

@@ -1,233 +1,186 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Play, Pause, Coffee, Square } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { C } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import ProgressRing from './ProgressRing';
 
-export default function TimerModal({ habitId, onClose }) {
+export default function TimerModal({ habitId, visible, onClose }) {
   const { habits, timerState, setTimerState, addSession } = useApp();
   const habit = habits.find(h => h.id === habitId);
   const intervalRef = useRef(null);
-  const [now, setNow] = useState(Date.now());
+  const [, setTick] = useState(0);
 
-  const isActiveTimer = timerState && timerState.habitId === habitId;
-  const duration = isActiveTimer ? timerState.duration : (habit?.timerDuration || 2700);
-  const breakDuration = habit?.breakDuration || 300;
+  const isActive = timerState && timerState.habitId === habitId;
+  const duration = isActive ? timerState.duration : (habit?.timerDuration || 2700);
+  const isRunning = isActive && !timerState.pausedAt;
+  const isPaused = isActive && timerState.pausedAt && !timerState.onBreak;
+  const isOnBreak = isActive && timerState.onBreak;
 
   const getElapsed = useCallback(() => {
-    if (!isActiveTimer) return 0;
-    const t = timerState;
-    const end = t.pausedAt || Date.now();
-    return (end - t.startedAt - t.totalPausedMs) / 1000;
-  }, [isActiveTimer, timerState]);
+    if (!isActive) return 0;
+    const end = timerState.pausedAt || Date.now();
+    return (end - timerState.startedAt - timerState.totalPausedMs) / 1000;
+  }, [isActive, timerState]);
 
-  const remaining = Math.max(0, (isActiveTimer ? timerState.duration : duration) - getElapsed());
-  const progress = isActiveTimer ? getElapsed() / timerState.duration : 0;
-  const isRunning = isActiveTimer && !timerState.pausedAt;
-  const mode = isActiveTimer ? timerState.mode : 'work';
+  const remaining = Math.max(0, (isActive ? timerState.duration : duration) - getElapsed());
+  const progress = isActive ? Math.min(getElapsed() / timerState.duration, 1) : 0;
 
   useEffect(() => {
     if (isRunning) {
-      intervalRef.current = setInterval(() => setNow(Date.now()), 200);
+      intervalRef.current = setInterval(() => setTick(t => t + 1), 200);
+    } else {
+      clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [isRunning, now]);
+  }, [isRunning]);
 
   useEffect(() => {
-    if (isActiveTimer && remaining <= 0 && isRunning) {
-      handleTimerComplete();
-    }
+    if (isActive && remaining <= 0 && isRunning) finishTimer(true);
   });
 
-  const handleTimerComplete = useCallback(() => {
-    if (!isActiveTimer) return;
+  const finishTimer = useCallback((auto) => {
+    if (!isActive) return;
     const elapsed = getElapsed();
-    const completionPct = elapsed / timerState.duration;
-    const completed = completionPct >= 0.8;
+    const pct = elapsed / timerState.duration;
     addSession({
-      id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-      habitId,
-      startTime: new Date(timerState.startedAt).toISOString(),
-      endTime: new Date().toISOString(),
-      duration: Math.round(elapsed),
-      completed,
-      completionPct: Math.round(completionPct * 100),
-      type: timerState.mode,
+      id: Date.now().toString() + Math.random().toString(36).slice(2,6),
+      habitId, startTime: new Date(timerState.startedAt).toISOString(),
+      endTime: new Date().toISOString(), duration: Math.round(elapsed),
+      completed: pct >= 0.8, completionPct: Math.round(pct * 100), type: 'timer',
     });
     setTimerState(null);
-  }, [isActiveTimer, timerState, habitId, getElapsed, addSession, setTimerState]);
+  }, [isActive, timerState, habitId, getElapsed, addSession, setTimerState]);
 
-  const startTimer = (dur, timerMode = 'work') => {
-    setTimerState({
-      habitId,
-      startedAt: Date.now(),
-      pausedAt: null,
-      totalPausedMs: 0,
-      duration: dur,
-      mode: timerMode,
-    });
+  const startTimer = (dur) => {
+    setTimerState({ habitId, startedAt: Date.now(), pausedAt: null, totalPausedMs: 0, duration: dur, mode: 'work', onBreak: false });
   };
 
   const pauseTimer = () => {
-    if (!isActiveTimer) return;
+    if (!isActive) return;
     setTimerState({ ...timerState, pausedAt: Date.now() });
   };
 
   const resumeTimer = () => {
-    if (!isActiveTimer || !timerState.pausedAt) return;
-    const pauseDuration = Date.now() - timerState.pausedAt;
-    setTimerState({
-      ...timerState,
-      pausedAt: null,
-      totalPausedMs: timerState.totalPausedMs + pauseDuration,
-    });
+    if (!isActive || !timerState.pausedAt) return;
+    const pd = Date.now() - timerState.pausedAt;
+    setTimerState({ ...timerState, pausedAt: null, totalPausedMs: timerState.totalPausedMs + pd, onBreak: false });
   };
 
   const stopTimer = () => {
-    if (isActiveTimer) {
-      const elapsed = getElapsed();
-      if (elapsed > 5) {
-        const completionPct = elapsed / timerState.duration;
-        addSession({
-          id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-          habitId,
-          startTime: new Date(timerState.startedAt).toISOString(),
-          endTime: new Date().toISOString(),
-          duration: Math.round(elapsed),
-          completed: completionPct >= 0.8,
-          completionPct: Math.round(completionPct * 100),
-          type: timerState.mode,
-        });
-      }
-    }
-    setTimerState(null);
+    if (isActive && getElapsed() > 5) finishTimer(false);
+    else setTimerState(null);
   };
 
-  const startBreak = (dur) => startTimer(dur, 'break');
-
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  const takeBreak = () => {
+    if (!isActive || !isRunning) return;
+    setTimerState({ ...timerState, pausedAt: Date.now(), onBreak: true });
   };
+
+  const fmt = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+  if (!habit) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 animate-fade-in" data-testid="timer-modal">
-      <div className="w-full max-w-[400px] mx-4 glass rounded-3xl p-6 animate-slide-up">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="font-heading text-2xl font-bold text-white uppercase tracking-wide">
-            {mode === 'break' ? 'Break Time' : habit?.name || 'Timer'}
-          </h3>
-          <button data-testid="close-timer" onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
+    <Modal visible={visible} animationType="fade" transparent testID="timer-modal">
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{isOnBreak ? 'BREAK TIME' : habit.name?.toUpperCase()}</Text>
+            <TouchableOpacity onPress={onClose} testID="close-timer"><Feather name="x" size={24} color={C.textDim} /></TouchableOpacity>
+          </View>
 
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative">
-            <ProgressRing
-              progress={progress}
-              size={200}
-              strokeWidth={10}
-              color={mode === 'break' ? '#22c55e' : '#f97316'}
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-heading font-black text-white tracking-tight">
-                {formatTime(remaining)}
-              </span>
-              <span className="text-xs text-zinc-500 uppercase tracking-widest mt-1">
-                {isRunning ? 'Running' : isActiveTimer ? 'Paused' : 'Ready'}
-              </span>
-            </div>
-          </div>
-          {isActiveTimer && (
-            <p className="text-xs text-zinc-500 mt-3">
-              {Math.round(progress * 100)}% complete (80% needed)
-            </p>
+          <View style={styles.ringWrap}>
+            <ProgressRing progress={progress} size={200} strokeWidth={10} color={isOnBreak ? C.secondary : C.primary} />
+            <View style={styles.ringCenter}>
+              <Text style={styles.time}>{fmt(remaining)}</Text>
+              <Text style={styles.status}>{isRunning ? 'RUNNING' : isOnBreak ? 'ON BREAK' : isActive ? 'PAUSED' : 'READY'}</Text>
+            </View>
+          </View>
+          {isActive && <Text style={styles.pctText}>{Math.round(progress*100)}% complete (80% needed)</Text>}
+
+          {/* NOT STARTED */}
+          {!isActive && (
+            <View style={styles.controls}>
+              <TouchableOpacity style={styles.fireBtn} onPress={() => startTimer(duration)} testID="start-work-timer">
+                <Text style={styles.fireBtnText}>START {Math.round(duration/60)} MIN</Text>
+              </TouchableOpacity>
+              <View style={styles.presetRow}>
+                {[{ l: '15m', v: 900 }, { l: '25m', v: 1500 }, { l: '45m', v: 2700 }].map(p => (
+                  <TouchableOpacity key={p.v} style={styles.presetBtn} onPress={() => startTimer(p.v)} testID={`start-${p.v}-timer`}>
+                    <Text style={styles.presetText}>{p.l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           )}
-        </div>
 
-        {!isActiveTimer ? (
-          <div className="space-y-3">
-            <button
-              data-testid="start-work-timer"
-              onClick={() => startTimer(duration)}
-              className="w-full h-14 fire-gradient rounded-full font-heading font-bold text-white uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:opacity-90 transition-all"
-            >
-              Start {Math.round(duration / 60)} Min Session
-            </button>
-            <div className="flex gap-2">
-              <button
-                data-testid="start-15-timer"
-                onClick={() => startTimer(900)}
-                className="flex-1 h-11 bg-zinc-800 border border-zinc-700 rounded-full text-sm font-semibold text-zinc-300 hover:bg-zinc-700 transition-all"
-              >
-                15 min
-              </button>
-              <button
-                data-testid="start-25-timer"
-                onClick={() => startTimer(1500)}
-                className="flex-1 h-11 bg-zinc-800 border border-zinc-700 rounded-full text-sm font-semibold text-zinc-300 hover:bg-zinc-700 transition-all"
-              >
-                25 min
-              </button>
-              <button
-                data-testid="start-45-timer"
-                onClick={() => startTimer(2700)}
-                className="flex-1 h-11 bg-zinc-800 border border-zinc-700 rounded-full text-sm font-semibold text-zinc-300 hover:bg-zinc-700 transition-all"
-              >
-                45 min
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              {isRunning ? (
-                <button
-                  data-testid="pause-timer"
-                  onClick={pauseTimer}
-                  className="flex-1 h-14 bg-zinc-800 border border-zinc-700 rounded-full font-bold text-white flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"
-                >
-                  <Pause size={18} /> Pause
-                </button>
-              ) : (
-                <button
-                  data-testid="resume-timer"
-                  onClick={resumeTimer}
-                  className="flex-1 h-14 fire-gradient rounded-full font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all"
-                >
-                  <Play size={18} /> Resume
-                </button>
-              )}
-              <button
-                data-testid="stop-timer"
-                onClick={stopTimer}
-                className="h-14 px-6 bg-red-600/20 border border-red-500/30 rounded-full font-bold text-red-400 flex items-center justify-center gap-2 hover:bg-red-600/30 transition-all"
-              >
-                <Square size={16} fill="currentColor" /> Stop
-              </button>
-            </div>
-            {mode === 'work' && (
-              <div className="flex gap-2">
-                <button
-                  data-testid="break-5-min"
-                  onClick={() => startBreak(300)}
-                  className="flex-1 h-10 bg-green-900/30 border border-green-500/20 rounded-full text-sm font-semibold text-green-400 flex items-center justify-center gap-1.5 hover:bg-green-900/50 transition-all"
-                >
-                  <Coffee size={14} /> 5 min break
-                </button>
-                <button
-                  data-testid="break-10-min"
-                  onClick={() => startBreak(600)}
-                  className="flex-1 h-10 bg-green-900/30 border border-green-500/20 rounded-full text-sm font-semibold text-green-400 flex items-center justify-center gap-1.5 hover:bg-green-900/50 transition-all"
-                >
-                  <Coffee size={14} /> 10 min break
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+          {/* RUNNING */}
+          {isRunning && (
+            <View style={styles.controls}>
+              <View style={styles.row}>
+                <TouchableOpacity style={styles.secBtn} onPress={pauseTimer} testID="pause-timer">
+                  <Feather name="pause" size={18} color="#fff" /><Text style={styles.secBtnText}>Pause</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.stopBtn} onPress={stopTimer} testID="stop-timer">
+                  <Feather name="square" size={16} color={C.destructive} /><Text style={styles.stopBtnText}>Stop</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.breakBtn} onPress={takeBreak} testID="take-break-btn">
+                <Feather name="coffee" size={16} color={C.secondary} /><Text style={styles.breakBtnText}>Take a Break</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* PAUSED (not break) */}
+          {isPaused && (
+            <View style={styles.controls}>
+              <View style={styles.row}>
+                <TouchableOpacity style={styles.fireBtn} onPress={resumeTimer} testID="resume-timer">
+                  <Feather name="play" size={18} color="#fff" /><Text style={styles.fireBtnText}> Resume</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.stopBtn} onPress={stopTimer} testID="stop-timer">
+                  <Feather name="square" size={16} color={C.destructive} /><Text style={styles.stopBtnText}>Stop</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ON BREAK — only Resume button */}
+          {isOnBreak && (
+            <View style={styles.controls}>
+              <TouchableOpacity style={styles.fireBtn} onPress={resumeTimer} testID="resume-from-break">
+                <Feather name="play" size={18} color="#fff" /><Text style={styles.fireBtnText}> Resume Timer</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modal: { width: '100%', maxWidth: 400, backgroundColor: 'rgba(9,9,11,0.95)', borderWidth: 1, borderColor: C.borderLight, borderRadius: 28, padding: 24 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  title: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 1 },
+  ringWrap: { alignItems: 'center', marginBottom: 16, position: 'relative' },
+  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  time: { color: '#fff', fontSize: 40, fontWeight: '900', letterSpacing: -1 },
+  status: { color: C.textFaint, fontSize: 10, fontWeight: '600', letterSpacing: 2, marginTop: 4 },
+  pctText: { textAlign: 'center', color: C.textFaint, fontSize: 11, marginBottom: 16 },
+  controls: { gap: 10 },
+  row: { flexDirection: 'row', gap: 10 },
+  fireBtn: { flexDirection: 'row', height: 56, borderRadius: 28, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', flex: 1 },
+  fireBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  secBtn: { flex: 1, flexDirection: 'row', height: 56, borderRadius: 28, backgroundColor: C.surfaceHl, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  stopBtn: { flexDirection: 'row', height: 56, paddingHorizontal: 24, borderRadius: 28, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  stopBtnText: { color: C.destructive, fontSize: 15, fontWeight: '700' },
+  breakBtn: { flexDirection: 'row', height: 44, borderRadius: 22, backgroundColor: 'rgba(34,197,94,0.1)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  breakBtnText: { color: C.secondary, fontSize: 13, fontWeight: '600' },
+  presetRow: { flexDirection: 'row', gap: 8 },
+  presetBtn: { flex: 1, height: 44, borderRadius: 22, backgroundColor: C.surfaceHl, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  presetText: { color: C.textMuted, fontSize: 13, fontWeight: '600' },
+});

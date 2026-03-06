@@ -1,210 +1,172 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { C, CATEGORIES } from '../constants/theme';
 import { useApp } from '../context/AppContext';
-import { ChevronRight, ChevronLeft, Sun, Moon as MoonIcon, Target, BookOpen, Code, Moon, Lightbulb, Bike, Camera, Dumbbell, Plus, Check } from 'lucide-react';
 
-const GOALS = [
-  { id: 'study', name: 'Study', icon: BookOpen, color: '#f97316' },
-  { id: 'coding', name: 'Coding', icon: Code, color: '#3b82f6' },
-  { id: 'sleeping', name: 'Sleeping', icon: Moon, color: '#a855f7' },
-  { id: 'learning', name: 'Learning New Skill', icon: Lightbulb, color: '#eab308' },
-  { id: 'ride', name: 'Bike/Car Ride', icon: Bike, color: '#22c55e' },
-  { id: 'content', name: 'Content Creation', icon: Camera, color: '#ec4899' },
-  { id: 'workout', name: 'Workout', icon: Dumbbell, color: '#ef4444' },
-  { id: 'custom', name: 'Custom Habit', icon: Plus, color: '#a1a1aa' },
-];
-
-const HOURS = Array.from({ length: 24 }, (_, i) => {
-  const h = i % 12 || 12;
-  const ampm = i < 12 ? 'AM' : 'PM';
-  return { value: `${String(i).padStart(2, '0')}:00`, label: `${h}:00 ${ampm}` };
+const HOURS_AM = Array.from({ length: 9 }, (_, i) => {
+  const h = i + 4;
+  return { value: `${String(h).padStart(2,'0')}:00`, label: `${h > 12 ? h-12 : h}:00 ${h < 12 ? 'AM' : 'PM'}` };
 });
+const HOURS_PM = [20,21,22,23,0,1,2].map(h => ({
+  value: `${String(h).padStart(2,'0')}:00`,
+  label: `${h === 0 ? 12 : h > 12 ? h-12 : h}:00 ${h < 12 && h !== 0 ? 'AM' : 'PM'}`
+}));
 
-export default function OnboardingScreen() {
-  const navigate = useNavigate();
+export default function OnboardingScreen({ navigation }) {
   const { savePreferences, addHabit } = useApp();
   const [step, setStep] = useState(0);
-  const [wakeUpTime, setWakeUpTime] = useState('07:00');
+  const [wakeUp, setWakeUp] = useState('07:00');
   const [bedTime, setBedTime] = useState('23:00');
-  const [selectedGoals, setSelectedGoals] = useState([]);
-  const [primaryGoal, setPrimaryGoal] = useState(null);
+  const [goals, setGoals] = useState([]);
+  const [primary, setPrimary] = useState(null);
 
-  const toggleGoal = (id) => {
-    setSelectedGoals(prev => {
+  const toggle = (id) => {
+    setGoals(prev => {
       if (prev.includes(id)) {
-        if (primaryGoal === id) setPrimaryGoal(prev.filter(g => g !== id)[0] || null);
+        if (primary === id) setPrimary(prev.filter(g => g !== id)[0] || null);
         return prev.filter(g => g !== id);
       }
-      const next = [...prev, id];
-      if (!primaryGoal) setPrimaryGoal(id);
-      return next;
+      if (!primary) setPrimary(id);
+      return [...prev, id];
     });
   };
 
-  const handleComplete = () => {
-    const prefs = { wakeUpTime, bedTime, goals: selectedGoals, defaultGoal: primaryGoal || selectedGoals[0] };
-    savePreferences(prefs);
-    selectedGoals.forEach(goalId => {
-      const goal = GOALS.find(g => g.id === goalId);
-      if (goal && goal.id !== 'custom') {
-        addHabit({ name: goal.name, category: goalId, timerDuration: 2700, breakDuration: 300 });
-      }
+  const finish = () => {
+    savePreferences({ wakeUpTime: wakeUp, bedTime, goals, defaultGoal: primary || goals[0] });
+    goals.forEach(gid => {
+      const g = CATEGORIES.find(c => c.id === gid);
+      if (g && g.id !== 'custom') addHabit({ name: g.name, category: gid, timerDuration: 2700, breakDuration: 300 });
     });
-    navigate('/today', { replace: true });
+    navigation.replace('Main');
   };
 
-  const canNext = step === 0 || step === 1 || (step === 2 && selectedGoals.length > 0);
+  const canNext = step < 2 || goals.length > 0;
 
   return (
-    <div data-testid="onboarding-screen" className="min-h-screen flex flex-col p-6">
-      {/* Progress */}
-      <div className="flex gap-2 mb-8 mt-2">
-        {[0, 1, 2].map(i => (
-          <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-500 ${i <= step ? 'fire-gradient' : 'bg-zinc-800'}`} />
-        ))}
-      </div>
+    <SafeAreaView style={styles.safe} testID="onboarding-screen">
+      <View style={styles.container}>
+        {/* Progress bar */}
+        <View style={styles.progress}>
+          {[0,1,2].map(i => <View key={i} style={[styles.bar, i <= step && styles.barActive]} />)}
+        </View>
 
-      <div className="flex-1">
-        {step === 0 && (
-          <div className="animate-slide-up">
-            <div className="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-6">
-              <Sun size={28} className="text-orange-500" />
-            </div>
-            <h1 className="font-heading text-4xl font-black text-white uppercase tracking-tight mb-2">
-              Wake Up Time
-            </h1>
-            <p className="text-zinc-400 text-sm mb-8">When do you usually start your day?</p>
-            <div className="grid grid-cols-3 gap-2 max-h-[400px] overflow-y-auto pr-2">
-              {HOURS.filter(h => {
-                const hour = parseInt(h.value);
-                return hour >= 4 && hour <= 12;
-              }).map(h => (
-                <button
-                  key={h.value}
-                  data-testid={`wake-time-${h.value}`}
-                  onClick={() => setWakeUpTime(h.value)}
-                  className={`h-12 rounded-xl text-sm font-semibold transition-all ${
-                    wakeUpTime === h.value
-                      ? 'fire-gradient text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-700'
-                  }`}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="animate-slide-up">
-            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6">
-              <MoonIcon size={28} className="text-purple-400" />
-            </div>
-            <h1 className="font-heading text-4xl font-black text-white uppercase tracking-tight mb-2">
-              Bed Time
-            </h1>
-            <p className="text-zinc-400 text-sm mb-8">When do you usually go to sleep?</p>
-            <div className="grid grid-cols-3 gap-2 max-h-[400px] overflow-y-auto pr-2">
-              {HOURS.filter(h => {
-                const hour = parseInt(h.value);
-                return hour >= 20 || hour <= 2;
-              }).map(h => (
-                <button
-                  key={h.value}
-                  data-testid={`bed-time-${h.value}`}
-                  onClick={() => setBedTime(h.value)}
-                  className={`h-12 rounded-xl text-sm font-semibold transition-all ${
-                    bedTime === h.value
-                      ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-700'
-                  }`}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="animate-slide-up">
-            <div className="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-6">
-              <Target size={28} className="text-orange-500" />
-            </div>
-            <h1 className="font-heading text-4xl font-black text-white uppercase tracking-tight mb-2">
-              Your Goals
-            </h1>
-            <p className="text-zinc-400 text-sm mb-2">Select habits you want to build. Tap twice to set as primary.</p>
-            <p className="text-zinc-600 text-xs mb-6">Select at least one goal</p>
-            <div className="grid grid-cols-2 gap-3">
-              {GOALS.map(goal => {
-                const Icon = goal.icon;
-                const selected = selectedGoals.includes(goal.id);
-                const isPrimary = primaryGoal === goal.id;
-                return (
-                  <button
-                    key={goal.id}
-                    data-testid={`goal-${goal.id}`}
-                    onClick={() => {
-                      if (selected && !isPrimary) {
-                        setPrimaryGoal(goal.id);
-                      } else {
-                        toggleGoal(goal.id);
-                      }
-                    }}
-                    className={`relative flex flex-col items-center gap-2 p-5 rounded-2xl border transition-all duration-200 ${
-                      selected
-                        ? isPrimary
-                          ? 'border-orange-500 bg-orange-500/10 shadow-[0_0_20px_rgba(249,115,22,0.2)]'
-                          : 'border-orange-500/30 bg-orange-500/5'
-                        : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
-                    }`}
-                  >
-                    {isPrimary && (
-                      <span className="absolute top-2 right-2 bg-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase">Primary</span>
-                    )}
-                    {selected && !isPrimary && (
-                      <span className="absolute top-2 right-2 w-5 h-5 bg-orange-500/20 rounded-full flex items-center justify-center">
-                        <Check size={12} className="text-orange-400" />
-                      </span>
-                    )}
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: goal.color + '20' }}>
-                      <Icon size={24} style={{ color: goal.color }} />
-                    </div>
-                    <span className={`text-sm font-medium ${selected ? 'text-white' : 'text-zinc-400'}`}>{goal.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex gap-3 mt-6 pb-4">
-        {step > 0 && (
-          <button
-            data-testid="onboarding-back"
-            onClick={() => setStep(s => s - 1)}
-            className="h-14 px-6 bg-zinc-800 border border-zinc-700 rounded-full font-semibold text-zinc-300 flex items-center gap-2 hover:bg-zinc-700 transition-all"
-          >
-            <ChevronLeft size={18} /> Back
-          </button>
-        )}
-        <button
-          data-testid="onboarding-next"
-          onClick={() => step < 2 ? setStep(s => s + 1) : handleComplete()}
-          disabled={!canNext}
-          className="flex-1 h-14 fire-gradient rounded-full font-heading font-bold text-white uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:opacity-90 transition-all disabled:opacity-40 disabled:shadow-none flex items-center justify-center gap-2"
-        >
-          {step < 2 ? (
-            <>Next <ChevronRight size={18} /></>
-          ) : (
-            <>Let's Go <span className="text-xl">&#x1F525;</span></>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {step === 0 && (
+            <View>
+              <View style={[styles.iconWrap, { backgroundColor: 'rgba(249,115,22,0.1)' }]}>
+                <Feather name="sun" size={28} color={C.primary} />
+              </View>
+              <Text style={styles.heading}>WAKE UP TIME</Text>
+              <Text style={styles.sub}>When do you usually start your day?</Text>
+              <View style={styles.grid}>
+                {HOURS_AM.map(h => (
+                  <TouchableOpacity key={h.value} testID={`wake-time-${h.value}`} onPress={() => setWakeUp(h.value)}
+                    style={[styles.timeBtn, wakeUp === h.value && styles.timeBtnActive]}>
+                    <Text style={[styles.timeBtnText, wakeUp === h.value && { color: '#fff' }]}>{h.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           )}
-        </button>
-      </div>
-    </div>
+
+          {step === 1 && (
+            <View>
+              <View style={[styles.iconWrap, { backgroundColor: 'rgba(168,85,247,0.1)' }]}>
+                <Feather name="moon" size={28} color={C.purple} />
+              </View>
+              <Text style={styles.heading}>BED TIME</Text>
+              <Text style={styles.sub}>When do you usually go to sleep?</Text>
+              <View style={styles.grid}>
+                {HOURS_PM.map(h => (
+                  <TouchableOpacity key={h.value} testID={`bed-time-${h.value}`} onPress={() => setBedTime(h.value)}
+                    style={[styles.timeBtn, bedTime === h.value && styles.timeBtnPurple]}>
+                    <Text style={[styles.timeBtnText, bedTime === h.value && { color: '#fff' }]}>{h.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View>
+              <View style={[styles.iconWrap, { backgroundColor: 'rgba(249,115,22,0.1)' }]}>
+                <Feather name="target" size={28} color={C.primary} />
+              </View>
+              <Text style={styles.heading}>YOUR GOALS</Text>
+              <Text style={styles.sub}>Select habits you want to build</Text>
+              <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 16 }}>Tap twice to set as primary</Text>
+              <View style={styles.goalGrid}>
+                {CATEGORIES.map(cat => {
+                  const sel = goals.includes(cat.id);
+                  const isPri = primary === cat.id;
+                  return (
+                    <TouchableOpacity key={cat.id} testID={`goal-${cat.id}`}
+                      onPress={() => { sel && !isPri ? setPrimary(cat.id) : toggle(cat.id); }}
+                      style={[styles.goalBtn, sel && styles.goalBtnSel, isPri && styles.goalBtnPri]}>
+                      {isPri && <View style={styles.priBadge}><Text style={styles.priBadgeText}>PRIMARY</Text></View>}
+                      {sel && !isPri && <View style={styles.checkBadge}><Feather name="check" size={10} color={C.primary} /></View>}
+                      <View style={[styles.goalIcon, { backgroundColor: cat.color + '20' }]}>
+                        <Feather name={cat.icon} size={22} color={cat.color} />
+                      </View>
+                      <Text style={[styles.goalLabel, sel && { color: '#fff' }]}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Nav buttons */}
+        <View style={styles.nav}>
+          {step > 0 && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(s => s-1)} testID="onboarding-back">
+              <Feather name="chevron-left" size={18} color={C.textMuted} /><Text style={styles.backBtnText}>Back</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            testID="onboarding-next"
+            style={[styles.nextBtn, !canNext && { opacity: 0.4 }]}
+            disabled={!canNext}
+            onPress={() => step < 2 ? setStep(s => s+1) : finish()}
+          >
+            <Text style={styles.nextBtnText}>{step < 2 ? 'NEXT' : "LET'S GO"}</Text>
+            <Feather name={step < 2 ? 'chevron-right' : 'zap'} size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, padding: 20 },
+  progress: { flexDirection: 'row', gap: 6, marginBottom: 24, marginTop: 8 },
+  bar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: C.surfaceHl },
+  barActive: { backgroundColor: C.primary },
+  scroll: { flex: 1 },
+  iconWrap: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  heading: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 },
+  sub: { color: C.textMuted, fontSize: 14, marginBottom: 24 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeBtn: { width: '31%', height: 48, borderRadius: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  timeBtnActive: { backgroundColor: C.primary, borderColor: C.primary },
+  timeBtnPurple: { backgroundColor: C.purple, borderColor: C.purple },
+  timeBtnText: { color: C.textMuted, fontSize: 13, fontWeight: '600' },
+  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  goalBtn: { width: '47%', borderRadius: 18, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, padding: 16, alignItems: 'center', gap: 8, position: 'relative' },
+  goalBtnSel: { borderColor: 'rgba(249,115,22,0.3)', backgroundColor: 'rgba(249,115,22,0.05)' },
+  goalBtnPri: { borderColor: C.primary, backgroundColor: 'rgba(249,115,22,0.08)' },
+  priBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: C.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  priBadgeText: { color: '#fff', fontSize: 8, fontWeight: '800' },
+  checkBadge: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(249,115,22,0.15)', alignItems: 'center', justifyContent: 'center' },
+  goalIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  goalLabel: { fontSize: 12, fontWeight: '500', color: C.textMuted, textAlign: 'center' },
+  nav: { flexDirection: 'row', gap: 10, marginTop: 16, paddingBottom: 8 },
+  backBtn: { flexDirection: 'row', height: 56, paddingHorizontal: 20, backgroundColor: C.surfaceHl, borderWidth: 1, borderColor: C.border, borderRadius: 28, alignItems: 'center', gap: 4 },
+  backBtnText: { color: C.textMuted, fontSize: 15, fontWeight: '600' },
+  nextBtn: { flex: 1, flexDirection: 'row', height: 56, borderRadius: 28, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+});

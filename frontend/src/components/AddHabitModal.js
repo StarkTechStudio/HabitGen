@@ -1,17 +1,8 @@
-import { useState } from 'react';
-import { X, BookOpen, Code, Moon, Lightbulb, Bike, Camera, Dumbbell, Star } from 'lucide-react';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Modal, ScrollView } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { C, CATEGORIES } from '../constants/theme';
 import { useApp } from '../context/AppContext';
-
-const CATEGORIES = [
-  { id: 'study', name: 'Study', icon: BookOpen, color: '#f97316' },
-  { id: 'coding', name: 'Coding', icon: Code, color: '#3b82f6' },
-  { id: 'sleeping', name: 'Sleeping', icon: Moon, color: '#a855f7' },
-  { id: 'learning', name: 'Learning', icon: Lightbulb, color: '#eab308' },
-  { id: 'ride', name: 'Ride', icon: Bike, color: '#22c55e' },
-  { id: 'content', name: 'Content', icon: Camera, color: '#ec4899' },
-  { id: 'workout', name: 'Workout', icon: Dumbbell, color: '#ef4444' },
-  { id: 'custom', name: 'Custom', icon: Star, color: '#a1a1aa' },
-];
 
 const DURATIONS = [
   { label: '15 min', value: 900 },
@@ -20,7 +11,7 @@ const DURATIONS = [
   { label: '60 min', value: 3600 },
 ];
 
-export default function AddHabitModal({ onClose }) {
+export default function AddHabitModal({ visible, onClose }) {
   const { addHabit } = useApp();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('study');
@@ -28,89 +19,89 @@ export default function AddHabitModal({ onClose }) {
 
   const handleSubmit = () => {
     if (!name.trim()) return;
-    addHabit({
-      name: name.trim(),
-      category,
-      timerDuration: duration,
-      breakDuration: 300,
-    });
+    addHabit({ name: name.trim(), category, timerDuration: duration, breakDuration: 300 });
+    setName(''); setCategory('study'); setDuration(2700);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/80 animate-fade-in" data-testid="add-habit-modal">
-      <div className="w-full max-w-[430px] glass rounded-t-3xl p-6 animate-slide-up">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading text-2xl font-bold text-white uppercase tracking-wide">New Habit</h3>
-          <button data-testid="close-add-habit" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={24} /></button>
-        </div>
+    <Modal visible={visible} animationType="slide" transparent testID="add-habit-modal">
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
+          <View style={styles.header}>
+            <Text style={styles.title}>NEW HABIT</Text>
+            <TouchableOpacity onPress={onClose} testID="close-add-habit"><Feather name="x" size={24} color={C.textDim} /></TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={styles.label}>HABIT NAME</Text>
+            <TextInput
+              testID="habit-name-input"
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Morning workout"
+              placeholderTextColor={C.textFaint}
+            />
 
-        <div className="mb-4">
-          <label className="text-xs text-zinc-500 uppercase tracking-widest mb-2 block">Habit Name</label>
-          <input
-            data-testid="habit-name-input"
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="e.g. Morning workout"
-            className="w-full h-12 bg-zinc-900 border border-zinc-800 rounded-xl px-4 text-white placeholder:text-zinc-600 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="text-xs text-zinc-500 uppercase tracking-widest mb-2 block">Category</label>
-          <div className="grid grid-cols-4 gap-2">
-            {CATEGORIES.map(cat => {
-              const Icon = cat.icon;
-              const selected = category === cat.id;
-              return (
-                <button
+            <Text style={styles.label}>CATEGORY</Text>
+            <View style={styles.catGrid}>
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
                   key={cat.id}
-                  data-testid={`category-${cat.id}`}
-                  onClick={() => setCategory(cat.id)}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
-                    selected
-                      ? 'border-orange-500/50 bg-orange-500/10'
-                      : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
-                  }`}
+                  testID={`category-${cat.id}`}
+                  onPress={() => setCategory(cat.id)}
+                  style={[styles.catBtn, category === cat.id && styles.catBtnActive]}
                 >
-                  <Icon size={18} style={{ color: cat.color }} />
-                  <span className="text-[10px] text-zinc-400">{cat.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                  <Feather name={cat.icon} size={18} color={cat.color} />
+                  <Text style={[styles.catLabel, category === cat.id && { color: '#fff' }]}>{cat.name.split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <div className="mb-6">
-          <label className="text-xs text-zinc-500 uppercase tracking-widest mb-2 block">Session Duration</label>
-          <div className="flex gap-2">
-            {DURATIONS.map(d => (
-              <button
-                key={d.value}
-                data-testid={`duration-${d.value}`}
-                onClick={() => setDuration(d.value)}
-                className={`flex-1 h-10 rounded-full text-sm font-semibold transition-all ${
-                  duration === d.value
-                    ? 'fire-gradient text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]'
-                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700'
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            <Text style={styles.label}>SESSION DURATION</Text>
+            <View style={styles.durRow}>
+              {DURATIONS.map(d => (
+                <TouchableOpacity
+                  key={d.value}
+                  testID={`duration-${d.value}`}
+                  onPress={() => setDuration(d.value)}
+                  style={[styles.durBtn, duration === d.value && styles.durBtnActive]}
+                >
+                  <Text style={[styles.durText, duration === d.value && { color: '#fff' }]}>{d.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
-        <button
-          data-testid="save-habit-btn"
-          onClick={handleSubmit}
-          disabled={!name.trim()}
-          className="w-full h-14 fire-gradient rounded-full font-heading font-bold text-white uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:opacity-90 transition-all disabled:opacity-40 disabled:shadow-none"
-        >
-          Create Habit
-        </button>
-      </div>
-    </div>
+          <TouchableOpacity
+            testID="save-habit-btn"
+            onPress={handleSubmit}
+            disabled={!name.trim()}
+            style={[styles.saveBtn, !name.trim() && { opacity: 0.4 }]}
+          >
+            <Text style={styles.saveBtnText}>CREATE HABIT</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  modal: { backgroundColor: 'rgba(9,9,11,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: C.borderLight, padding: 24, maxHeight: '85%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  title: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 1 },
+  label: { color: C.textFaint, fontSize: 10, fontWeight: '600', letterSpacing: 2, marginBottom: 8, marginTop: 16 },
+  input: { height: 48, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 16, color: '#fff', fontSize: 15 },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  catBtn: { width: '23%', aspectRatio: 1, borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  catBtnActive: { borderColor: 'rgba(249,115,22,0.5)', backgroundColor: 'rgba(249,115,22,0.08)' },
+  catLabel: { fontSize: 9, color: C.textDim, fontWeight: '500' },
+  durRow: { flexDirection: 'row', gap: 8 },
+  durBtn: { flex: 1, height: 40, borderRadius: 20, backgroundColor: C.surfaceHl, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  durBtnActive: { backgroundColor: C.primary, borderColor: C.primary },
+  durText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  saveBtn: { height: 56, borderRadius: 28, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+});

@@ -1,169 +1,116 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { C } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import PaywallModal from '../components/PaywallModal';
-import { Crown, Lock, MapPin, Dumbbell, Target, ChevronRight, Check } from 'lucide-react';
 
-const SAMPLE_JOURNEYS = [
-  {
-    id: 'weight-loss',
-    title: 'Lose 2 kg in 21 Days',
-    desc: 'Daily exercises + diet tracking',
-    icon: Dumbbell,
-    color: '#ef4444',
-    days: 21,
-    tasks: [
-      { day: 1, task: '30 min morning walk + 2L water', timer: 1800 },
-      { day: 2, task: '15 min HIIT workout', timer: 900 },
-      { day: 3, task: '45 min yoga session', timer: 2700 },
-      { day: 4, task: '20 min strength training', timer: 1200 },
-      { day: 5, task: '30 min cycling', timer: 1800 },
-    ],
-  },
-  {
-    id: 'coding-mastery',
-    title: 'Learn React in 30 Days',
-    desc: 'Build projects daily',
-    icon: Target,
-    color: '#3b82f6',
-    days: 30,
-    tasks: [
-      { day: 1, task: 'Setup environment + Hello World', timer: 2700 },
-      { day: 2, task: 'Components & Props', timer: 2700 },
-      { day: 3, task: 'State & Events', timer: 2700 },
-      { day: 4, task: 'useEffect & API calls', timer: 3600 },
-      { day: 5, task: 'Build a Todo App', timer: 3600 },
-    ],
-  },
-  {
-    id: 'mindfulness',
-    title: '14 Days of Mindfulness',
-    desc: 'Build a meditation practice',
-    icon: MapPin,
-    color: '#22c55e',
-    days: 14,
-    tasks: [
-      { day: 1, task: '5 min breathing exercise', timer: 300 },
-      { day: 2, task: '10 min guided meditation', timer: 600 },
-      { day: 3, task: '15 min body scan', timer: 900 },
-      { day: 4, task: '10 min gratitude journaling', timer: 600 },
-      { day: 5, task: '20 min silent meditation', timer: 1200 },
-    ],
-  },
+const JOURNEYS = [
+  { id: 'weight', title: 'Lose 2 kg in 21 Days', desc: 'Daily exercises + diet tracking', icon: 'activity', color: C.destructive, days: 21,
+    tasks: [{ d:1, t:'30 min morning walk + 2L water', m:30 },{ d:2, t:'15 min HIIT workout', m:15 },{ d:3, t:'45 min yoga', m:45 },{ d:4, t:'20 min strength', m:20 },{ d:5, t:'30 min cycling', m:30 }]},
+  { id: 'code', title: 'Learn React in 30 Days', desc: 'Build projects daily', icon: 'code', color: C.blue, days: 30,
+    tasks: [{ d:1, t:'Setup + Hello World', m:45 },{ d:2, t:'Components & Props', m:45 },{ d:3, t:'State & Events', m:45 },{ d:4, t:'useEffect & APIs', m:60 },{ d:5, t:'Build a Todo App', m:60 }]},
+  { id: 'mind', title: '14 Days of Mindfulness', desc: 'Build a meditation practice', icon: 'heart', color: C.secondary, days: 14,
+    tasks: [{ d:1, t:'5 min breathing', m:5 },{ d:2, t:'10 min guided meditation', m:10 },{ d:3, t:'15 min body scan', m:15 },{ d:4, t:'10 min gratitude journal', m:10 },{ d:5, t:'20 min silent meditation', m:20 }]},
 ];
 
 export default function JourneyScreen() {
   const { isPremium, setIsPremium } = useApp();
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [selectedJourney, setSelectedJourney] = useState(null);
-  const [completedTasks, setCompletedTasks] = useState({});
+  const [paywall, setPaywall] = useState(false);
+  const [open, setOpen] = useState(null);
+  const [done, setDone] = useState({});
 
-  const handleJourneyClick = (journey) => {
-    if (!isPremium) {
-      setShowPaywall(true);
-      return;
-    }
-    setSelectedJourney(selectedJourney?.id === journey.id ? null : journey);
+  const handleClick = (j) => {
+    if (!isPremium) return setPaywall(true);
+    setOpen(open === j.id ? null : j.id);
   };
-
-  const toggleTask = (journeyId, day) => {
-    const key = `${journeyId}-${day}`;
-    setCompletedTasks(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  const toggleTask = (jid, d) => setDone(p => ({ ...p, [`${jid}-${d}`]: !p[`${jid}-${d}`] }));
 
   return (
-    <div data-testid="journey-screen" className="p-4 pt-6">
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="font-heading text-4xl font-black text-white uppercase tracking-tight">Journeys</h1>
-          {!isPremium && <Lock size={18} className="text-zinc-500" />}
-        </div>
-        <p className="text-zinc-400 text-sm">Guided paths to achieve your goals</p>
-      </div>
+    <SafeAreaView style={styles.safe} testID="journey-screen">
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        <Text style={styles.heading}>JOURNEYS</Text>
+        <Text style={styles.sub}>Guided paths to achieve your goals</Text>
 
-      {!isPremium && (
-        <button
-          data-testid="unlock-premium-banner"
-          onClick={() => setShowPaywall(true)}
-          className="w-full p-4 fire-gradient rounded-2xl flex items-center gap-3 mb-6 shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:opacity-95 transition-all"
-        >
-          <Crown size={24} className="text-white shrink-0" />
-          <div className="flex-1 text-left">
-            <p className="text-white font-bold text-sm">Unlock Premium Journeys</p>
-            <p className="text-white/70 text-xs">Get guided programs, analytics & more</p>
-          </div>
-          <ChevronRight size={20} className="text-white/70" />
-        </button>
-      )}
+        {!isPremium && (
+          <TouchableOpacity style={styles.banner} onPress={() => setPaywall(true)} testID="unlock-premium-banner">
+            <Feather name="award" size={22} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bannerTitle}>Unlock Premium Journeys</Text>
+              <Text style={styles.bannerSub}>Guided programs, analytics & more</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+        )}
 
-      <div className="space-y-4">
-        {SAMPLE_JOURNEYS.map(journey => {
-          const Icon = journey.icon;
-          const isOpen = selectedJourney?.id === journey.id;
-          const journeyCompleted = journey.tasks.filter(t => completedTasks[`${journey.id}-${t.day}`]).length;
+        {JOURNEYS.map(j => {
+          const isOpen = open === j.id;
+          const doneCount = j.tasks.filter(t => done[`${j.id}-${t.d}`]).length;
           return (
-            <div key={journey.id} className="glass-card rounded-2xl overflow-hidden transition-all">
-              <button
-                data-testid={`journey-${journey.id}`}
-                onClick={() => handleJourneyClick(journey)}
-                className="w-full p-4 flex items-center gap-3 text-left hover:bg-white/5 transition-all"
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: journey.color + '20' }}>
-                  <Icon size={22} style={{ color: journey.color }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold text-sm">{journey.title}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">{journey.desc}</p>
+            <View key={j.id} style={styles.card}>
+              <TouchableOpacity style={styles.cardHeader} onPress={() => handleClick(j)} testID={`journey-${j.id}`}>
+                <View style={[styles.jIcon, { backgroundColor: j.color + '20' }]}>
+                  <Feather name={j.icon} size={20} color={j.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.jTitle}>{j.title}</Text>
+                  <Text style={styles.jDesc}>{j.desc}</Text>
                   {isPremium && (
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${(journeyCompleted / journey.tasks.length) * 100}%`, backgroundColor: journey.color }} />
-                      </div>
-                      <span className="text-[10px] text-zinc-500">{journeyCompleted}/{journey.tasks.length}</span>
-                    </div>
+                    <View style={styles.jProgress}>
+                      <View style={styles.jBar}><View style={[styles.jBarFill, { width: `${(doneCount/j.tasks.length)*100}%`, backgroundColor: j.color }]} /></View>
+                      <Text style={styles.jPct}>{doneCount}/{j.tasks.length}</Text>
+                    </View>
                   )}
-                </div>
-                <div className="text-zinc-600">
-                  {!isPremium ? <Lock size={16} /> : <ChevronRight size={16} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
-                </div>
-              </button>
+                </View>
+                {!isPremium ? <Feather name="lock" size={16} color={C.textFaint} /> : <Feather name="chevron-right" size={16} color={C.textFaint} style={isOpen && { transform: [{ rotate: '90deg' }] }} />}
+              </TouchableOpacity>
               {isOpen && isPremium && (
-                <div className="px-4 pb-4 space-y-2 animate-slide-up">
-                  {journey.tasks.map(task => {
-                    const done = completedTasks[`${journey.id}-${task.day}`];
+                <View style={styles.tasks}>
+                  {j.tasks.map(task => {
+                    const isDone = done[`${j.id}-${task.d}`];
                     return (
-                      <button
-                        key={task.day}
-                        data-testid={`task-${journey.id}-day-${task.day}`}
-                        onClick={() => toggleTask(journey.id, task.day)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                          done ? 'border-green-500/30 bg-green-500/5' : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
-                        }`}
-                      >
-                        <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                          done ? 'bg-green-500 border-green-500' : 'border-zinc-700'
-                        }`}>
-                          {done && <Check size={14} className="text-white" />}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className={`text-sm ${done ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>Day {task.day}: {task.task}</p>
-                        </div>
-                        <span className="text-[10px] text-zinc-600">{Math.round(task.timer / 60)}m</span>
-                      </button>
+                      <TouchableOpacity key={task.d} style={[styles.taskRow, isDone && styles.taskDone]} onPress={() => toggleTask(j.id, task.d)} testID={`task-${j.id}-${task.d}`}>
+                        <View style={[styles.taskCheck, isDone && styles.taskCheckDone]}>
+                          {isDone && <Feather name="check" size={12} color="#fff" />}
+                        </View>
+                        <Text style={[styles.taskText, isDone && { textDecorationLine: 'line-through', color: C.textFaint }]} numberOfLines={1}>Day {task.d}: {task.t}</Text>
+                        <Text style={styles.taskMin}>{task.m}m</Text>
+                      </TouchableOpacity>
                     );
                   })}
-                </div>
+                </View>
               )}
-            </div>
+            </View>
           );
         })}
-      </div>
-
-      {showPaywall && (
-        <PaywallModal
-          onClose={() => setShowPaywall(false)}
-          onSubscribe={(plan) => { setIsPremium(true); setShowPaywall(false); }}
-        />
-      )}
-    </div>
+      </ScrollView>
+      <PaywallModal visible={paywall} onClose={() => setPaywall(false)} onSubscribe={() => { setIsPremium(true); setPaywall(false); }} />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.bg },
+  scroll: { flex: 1, padding: 16, paddingTop: 20 },
+  heading: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 },
+  sub: { color: C.textMuted, fontSize: 14, marginBottom: 20 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: C.primary, borderRadius: 18, marginBottom: 20 },
+  bannerTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  bannerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
+  card: { backgroundColor: 'rgba(9,9,11,0.6)', borderWidth: 1, borderColor: C.borderLight, borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  jIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  jTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  jDesc: { color: C.textFaint, fontSize: 11, marginTop: 2 },
+  jProgress: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  jBar: { flex: 1, height: 3, backgroundColor: C.surfaceHl, borderRadius: 2, overflow: 'hidden' },
+  jBarFill: { height: '100%', borderRadius: 2 },
+  jPct: { color: C.textFaint, fontSize: 10 },
+  tasks: { paddingHorizontal: 14, paddingBottom: 14, gap: 6 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: 'rgba(9,9,11,0.3)' },
+  taskDone: { borderColor: 'rgba(34,197,94,0.2)', backgroundColor: 'rgba(34,197,94,0.03)' },
+  taskCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+  taskCheckDone: { backgroundColor: C.secondary, borderColor: C.secondary },
+  taskText: { flex: 1, color: C.textMuted, fontSize: 12 },
+  taskMin: { color: C.textFaint, fontSize: 10 },
+});

@@ -1,4 +1,6 @@
-const PREFIX = 'habitgen_';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PREFIX = '@habitgen_';
 
 export const KEYS = {
   PREFERENCES: PREFIX + 'preferences',
@@ -10,23 +12,22 @@ export const KEYS = {
 };
 
 export const storage = {
-  get(key) {
+  async get(key) {
     try {
-      const data = localStorage.getItem(key);
+      const data = await AsyncStorage.getItem(key);
       return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch { /* storage full */ }
+  async set(key, value) {
+    try { await AsyncStorage.setItem(key, JSON.stringify(value)); }
+    catch {}
   },
-  remove(key) {
-    localStorage.removeItem(key);
+  async remove(key) {
+    try { await AsyncStorage.removeItem(key); }
+    catch {}
   },
-  clear() {
-    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+  async clearAll() {
+    try { await AsyncStorage.multiRemove(Object.values(KEYS)); }
+    catch {}
   },
 };
