@@ -11,66 +11,98 @@
 - **Navigation:** React Navigation (4 tabs: Today, Journey, History, Account)
 - **State Management:** React Context (AuthContext, ThemeContext, HabitProvider, PremiumContext)
 - **Local Storage:** AsyncStorage
-- **Auth:** Supabase (JWT + Google OAuth via client ID)
-- **Monetization:** RevenueCat (react-native-purchases + react-native-purchases-ui) with default dashboard paywall
-- **Ads:** Google AdMob (placeholder)
+- **Auth:** Supabase (JWT + Google OAuth via client ID 506503251834-...)
+- **Monetization:** RevenueCat (react-native-purchases + react-native-purchases-ui)
+  - API Key: test_ghPtiGxQAYDDKQKmwpcDeivBIHN
+  - Entitlement: "HabitGen Pro"
+  - Products: Monthly, Yearly (configured in RevenueCat dashboard)
+  - Dashboard-managed paywall via RevenueCatUI.Paywall
+  - Customer Center for subscription management
+- **Ads:** Google AdMob (placeholder, hidden for premium)
 
 ## File Structure
 ```
-/app/HabitGen/src/
-├── api/           # admob, revenuecat, screenlock, supabase
-├── assets/        # logo.png (app icon)
-├── components/    # 13 reusable components
-├── context/       # AuthContext, HabitContext, ThemeContext
-├── navigation/    # AppNavigator, TabNavigator
-├── screens/       # today/, history/, journey/, account/, onboarding/
-├── types/         # Type definitions, theme
-└── utils/         # helpers (scaleFontSize), storage
+/app/HabitGen/
+├── android/
+│   └── app/src/main/java/com/starktechstudio/habitgen/
+│       ├── MainActivity.kt
+│       ├── MainApplication.kt
+│       ├── ScreenLockModule.kt      # Native screen pinning
+│       └── ScreenLockPackage.kt     # Module registration
+├── src/
+│   ├── api/
+│   │   ├── admob.ts
+│   │   ├── revenuecat.ts            # RevenueCat service
+│   │   ├── screenlock.ts            # Screen lock with native module
+│   │   └── supabase.ts
+│   ├── assets/logo.png              # App icon source
+│   ├── components/
+│   │   ├── AdBanner.tsx             # Premium-aware ad
+│   │   ├── AuthScreen.tsx           # Google OAuth + email verify
+│   │   ├── CreateHabitForm.tsx      # Premium-aware fields
+│   │   ├── DurationScrollWheel.tsx  # Fixed highlighting
+│   │   ├── EmojiPicker.tsx
+│   │   ├── FocusOverlay.tsx         # iPhone-style focus mode
+│   │   ├── HabitCard.tsx
+│   │   ├── HabitDetailScreen.tsx
+│   │   ├── PremiumScreen.tsx        # RevenueCat paywall
+│   │   ├── TimerScreen.tsx          # Slot-based breaks
+│   │   └── TimePickerStep.tsx
+│   ├── context/
+│   │   ├── AuthContext.tsx           # Syncs RevenueCat user ID
+│   │   ├── HabitContext.tsx
+│   │   └── ThemeContext.tsx
+│   ├── navigation/
+│   │   ├── AppNavigator.tsx
+│   │   └── TabNavigator.tsx          # Android nav padding
+│   ├── screens/
+│   │   ├── account/AccountScreen.tsx  # Customer Center
+│   │   ├── history/HistoryScreen.tsx
+│   │   ├── journey/JourneyScreen.tsx  # Guided paths
+│   │   ├── onboarding/OnboardingScreen.tsx  # 4 steps with focus apps
+│   │   ├── today/TodayScreen.tsx
+│   │   └── SplashScreen.tsx
+│   ├── types/
+│   │   ├── index.ts
+│   │   └── theme.ts                   # Bright vibrant colors
+│   └── utils/
+│       ├── helpers.ts
+│       └── storage.ts
+├── App.tsx                             # PremiumContext, RevenueCat init
+└── package.json
 ```
 
-## Key Integrations
-- **RevenueCat:** API key `test_ghPtiGxQAYDDKQKmwpcDeivBIHN`, entitlement: `premium`, uses RevenueCatUI.Paywall for dashboard-managed paywall
-- **Supabase Auth:** URL `https://vwgvqmysqpibkocnwihq.supabase.co`, Google OAuth client ID `506503251834-mvkrt8qs19g7eufms57mratf1r3rn1cp.apps.googleusercontent.com`
-- **Google AdMob:** Placeholder with test IDs
+## Implemented Features (All Sessions)
 
-## Implemented Features
+### Session 1 - Original 15 Features
+All original features implemented (single preset selection, scroll highlighting, iPhone focus UI, etc.)
 
-### Session 1 (Original 15 features)
-1. Single selection for preset time in CreateHabitForm
-2. Custom duration scroll highlighting in DurationScrollWheel
-3. Modern iPhone-style Focus Mode UI in FocusOverlay
-4. Difficulty/Priority disabled for non-premium with paywall
-5. Journey tab with pain points and paywall for non-premium
-6. History chart + "X min" format, deduplicated sessions
-7. Extended emojis (18 categories including trading, dancing, boxing, etc.)
-8. Clear All Data removes everything (no Export option)
-9. Google OAuth button in AuthScreen
-10. Bundle ID: com.starktechstudio.habitgen
-11. Dynamic text sizing + Android nav bar spacing
-12. Today tab fixed header with scrollable habits
-13. History tab fixed header with scrollable sessions
-14. Timer lock screen popup with allowed/blocked apps
-15. 30-min break system with expiry
+### Session 2 - 9 Changes
+RevenueCat placeholder, premium-aware UI, bright colors, Google OAuth, break system, etc.
 
-### Session 2 (9 new changes)
-1. **App Logo:** User's uploaded logo used as Android/iOS app icon (mipmap-*). Fire emoji on splash screen.
-2. **RevenueCat Integration:** react-native-purchases + react-native-purchases-ui with test API key. Dashboard-managed paywall via RevenueCatUI.Paywall component.
-3. **Premium-Aware UI:** PRO badges and lock icons hidden for premium users. Difficulty/Priority fields functional for premium. Journey cards show full opacity with "Start" button for premium.
-4. **DurationScrollWheel Fix:** Uses onMomentumScrollEnd for precise snap detection. Value-based highlighting (no lag).
-5. **Bright Color Scheme:** Vibrant colors inspired by HabitKit - primary #FF2D55/#FF375F, accent #FF9500/#FFD60A. Both dark and light modes supported.
-6. **Ad Banner Positioning:** Hidden for premium users. Positioned above tab bar (which already has Android nav padding).
-7. **Google OAuth via Supabase:** signInWithOAuth with Google client ID. Email verification flow with dedicated verify screen, resend option, and login-after-verify check.
-8. **Break Button System:** Slot-based breaks (1 per 30 min). Break button shown as overlay during focus. Timer pauses during break with countdown. Breaks per session = floor(duration/30).
-9. **Timer Lock Screen Flow:** Start popup explains screen lock, allowed apps (Phone, SMS), blocked apps (social media). Stop popup warns about streak loss. Completion unlocks screen + adds streak.
+### Session 3 - Current (8 Changes)
+1. **App Icon** - User's logo cropped to fill mipmap-* icons. Fire emoji on splash screen.
+2. **Full RevenueCat Integration** - react-native-purchases + react-native-purchases-ui with:
+   - API key: test_ghPtiGxQAYDDKQKmwpcDeivBIHN
+   - Entitlement: "HabitGen Pro"
+   - RevenueCatUI.Paywall for dashboard-managed paywall
+   - Customer Center via RevenueCatUI.presentCustomerCenter()
+   - Products: Monthly + Yearly (configure in RC dashboard)
+   - User ID synced with Supabase auth
+3. **Premium Unlock** - onCustomerInfoUpdate auto-updates isPremium. All PRO/lock badges hidden for premium users.
+4. **Native Screen Lock** - Android ScreenLockModule.kt with startLockTask()/stopLockTask(). Onboarding step 4 lets user pick 3 allowed apps.
+5. **Ad Banner Fix** - Hidden for premium. Layout positioned above tab bar, not behind Android nav.
+6. **DurationScrollWheel Fix** - Uses onScroll (scrollEventThrottle=16) for instant index-based highlighting. centeredIndex tracks visual position.
+7. **Break System** - Slot-based: breakSlots[i] for each 30-min slot. Available after (i+1)*30 min, expires at (i+2)*30 min. Timer pauses during break.
+8. **Journey Guided Paths** - Sleep journey locks phone during schedule. Other journeys set daily reminders for premium users.
 
-## MOCKED Features
-- **RevenueCat:** Uses test API key (no real purchases)
-- **Google AdMob:** Placeholder banner (no real ads)
-- **Screen Lock:** UI overlay only (native pinning requires native module)
-- **Google OAuth:** Needs native SDK setup for actual deep linking
+## Bright Color Scheme
+**Light Mode:** Primary #FF2D55, Accent #FF9500, Success #34C759
+**Dark Mode:** Primary #FF375F, Accent #FFD60A, Success #30D158
 
 ## Upcoming Tasks
-- P0: Native screen lock module (Android startLockTask / iOS Guided Access)
-- P1: Supabase data sync for habits/streaks across devices
-- P2: Hydration journey with push notifications and hourly reminders
-- P3: UI/UX responsive polish across Android screen sizes
+- P1: Supabase data synchronization for habits/streaks across devices
+- P2: Push notifications for journey reminders (hydration hourly, sleep winddown)
+- P2: Full responsive polish across all Android screen sizes
+- P3: Journey content expansion with real notification triggers
+- P3: Production RevenueCat/AdMob SDK final setup with real products

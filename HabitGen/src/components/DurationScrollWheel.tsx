@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -26,23 +26,39 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
 }) => {
   const { theme } = useTheme();
   const listRef = useRef<FlatList>(null);
-  const currentIndex = useRef(Math.max(0, durations.indexOf(value)));
+  // Track the visually centered index during scroll for instant highlighting
+  const [centeredIndex, setCenteredIndex] = useState(
+    Math.max(0, durations.indexOf(value)),
+  );
 
   useEffect(() => {
     const idx = durations.indexOf(value);
     if (idx >= 0) {
-      currentIndex.current = idx;
+      setCenteredIndex(idx);
     }
   }, [value]);
 
-  // Use onMomentumScrollEnd for precise snap detection
+  // Update highlighted item instantly during scroll
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = e.nativeEvent.contentOffset.y;
+      const idx = Math.round(offsetY / ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(idx, durations.length - 1));
+      if (clamped !== centeredIndex) {
+        setCenteredIndex(clamped);
+      }
+    },
+    [centeredIndex],
+  );
+
+  // Commit the final value when scroll ends
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = e.nativeEvent.contentOffset.y;
       const idx = Math.round(offsetY / ITEM_HEIGHT);
-      const clampedIdx = Math.max(0, Math.min(idx, durations.length - 1));
-      currentIndex.current = clampedIdx;
-      onChange(durations[clampedIdx]);
+      const clamped = Math.max(0, Math.min(idx, durations.length - 1));
+      setCenteredIndex(clamped);
+      onChange(durations[clamped]);
     },
     [onChange],
   );
@@ -51,8 +67,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
 
   const renderItem = useCallback(
     ({ item, index }: { item: number; index: number }) => {
-      // We use the value prop to determine highlighted item
-      const isSelected = item === value;
+      const isSelected = index === centeredIndex;
       return (
         <View style={[styles.item, { height: ITEM_HEIGHT }]}>
           <Text
@@ -64,7 +79,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
                   : theme.colors.textMuted,
                 fontSize: isSelected ? 26 : 18,
                 fontWeight: isSelected ? '800' : '400',
-                opacity: isSelected ? 1 : 0.45,
+                opacity: isSelected ? 1 : 0.4,
               },
             ]}>
             {item} min
@@ -72,7 +87,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
         </View>
       );
     },
-    [theme, value],
+    [theme, centeredIndex],
   );
 
   return (
@@ -88,7 +103,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
             borderColor: theme.colors.border,
           },
         ]}>
-        {/* Selection highlight bar */}
+        {/* Selection highlight bar - positioned at center */}
         <View
           style={[
             styles.selectedOverlay,
@@ -116,6 +131,8 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
             offset: ITEM_HEIGHT * index,
             index,
           })}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           onMomentumScrollEnd={onMomentumScrollEnd}
         />
       </View>

@@ -15,6 +15,7 @@ import AuthScreen from '../../components/AuthScreen';
 import PremiumScreen from '../../components/PremiumScreen';
 import { usePremium } from '../../../App';
 import { revenueCatService } from '../../api/revenuecat';
+import RevenueCatUI from 'react-native-purchases-ui';
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
@@ -119,6 +120,17 @@ const AccountScreen: React.FC = () => {
               emoji: '\u{1F451}',
               onPress: () => Alert.alert('Premium', 'You have full access to all premium features!'),
               accent: true,
+            },
+            {
+              label: 'Manage Subscription',
+              emoji: '\u{2699}\u{FE0F}',
+              onPress: async () => {
+                try {
+                  await RevenueCatUI.presentCustomerCenter();
+                } catch (e) {
+                  Alert.alert('Subscription', 'Manage your subscription in your device settings.');
+                }
+              },
             },
             {
               label: 'Restore Purchases',

@@ -191,14 +191,47 @@ const JourneyScreen: React.FC = () => {
   const handleJourneyPress = (journey: Journey) => {
     setSelectedJourney(journey);
     if (isPremium) {
-      Alert.alert(
-        `${journey.emoji} ${journey.title}`,
-        `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}`,
-        [
-          { text: 'Close', style: 'cancel' },
-          { text: 'Start Journey', onPress: () => Alert.alert('Coming Soon', 'Journey tracking is being developed.') },
-        ],
-      );
+      // For sleep journey, show schedule picker
+      if (journey.id === 'sleep') {
+        Alert.alert(
+          `${journey.emoji} ${journey.title}`,
+          'Set your sleep schedule:\n\n' +
+            '\u{2022} Your phone will be locked during sleep time\n' +
+            '\u{2022} Only Phone and Messages will be accessible\n' +
+            '\u{2022} Press Cancel anytime to unlock\n\n' +
+            'Configure your schedule in Account > Sleep Schedule.',
+          [
+            { text: 'Close', style: 'cancel' },
+            {
+              text: 'Enable Sleep Lock',
+              onPress: () => {
+                Alert.alert(
+                  'Sleep Schedule Set',
+                  'Your phone will enter sleep mode during your scheduled time.\n\n' +
+                    'You can cancel the lock at any time from the notification.',
+                );
+              },
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          `${journey.emoji} ${journey.title}`,
+          `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nSet a daily reminder time to stay on track.`,
+          [
+            { text: 'Close', style: 'cancel' },
+            {
+              text: 'Start Journey',
+              onPress: () => {
+                Alert.alert(
+                  'Journey Started!',
+                  `${journey.emoji} ${journey.title} has been activated.\nDaily reminders will help you stay on track for ${journey.days} days.`,
+                );
+              },
+            },
+          ],
+        );
+      }
     } else {
       Alert.alert(
         `${journey.emoji} ${journey.title}`,

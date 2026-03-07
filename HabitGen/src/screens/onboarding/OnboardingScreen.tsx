@@ -6,13 +6,27 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { storage } from '../../utils/storage';
 import { GOALS } from '../../types';
 import TimePickerStep from '../../components/TimePickerStep';
+import { screenLock } from '../../api/screenlock';
 
 const { width } = Dimensions.get('window');
+const TOTAL_STEPS = 4;
+
+const FOCUS_APPS = [
+  { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', locked: true },
+  { id: 'messages', label: 'Messages', emoji: '\u{1F4AC}', locked: true },
+  { id: 'youtube', label: 'YouTube', emoji: '\u{1F4FA}', locked: false },
+  { id: 'maps', label: 'Maps', emoji: '\u{1F5FA}\u{FE0F}', locked: false },
+  { id: 'music', label: 'Music', emoji: '\u{1F3B5}', locked: false },
+  { id: 'calculator', label: 'Calculator', emoji: '\u{1F522}', locked: false },
+  { id: 'camera', label: 'Camera', emoji: '\u{1F4F7}', locked: false },
+  { id: 'clock', label: 'Clock', emoji: '\u{23F0}', locked: false },
+];
 
 interface OnboardingScreenProps {
   onComplete: () => void;
@@ -24,6 +38,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
   const [bedTime, setBedTime] = useState('23:00');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [allowedApps, setAllowedApps] = useState<string[]>(['phone', 'messages', 'youtube']);
 
   const toggleGoal = (id: string) => {
     setSelectedGoals(prev =>
@@ -31,7 +46,20 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
     );
   };
 
+  const toggleApp = (id: string) => {
+    const app = FOCUS_APPS.find(a => a.id === id);
+    if (app?.locked) return; // Phone & Messages are always allowed
+    setAllowedApps(prev => {
+      if (prev.includes(id)) return prev.filter(a => a !== id);
+      if (prev.length >= 3) return prev; // Max 3 apps
+      return [...prev, id];
+    });
+  };
+
   const handleFinish = async () => {
+    const appLabels = allowedApps.map(id => FOCUS_APPS.find(a => a.id === id)?.label || id);
+    screenLock.setAllowedApps(appLabels);
+
     await storage.setUserPreferences({
       wakeUpTime,
       bedTime,
@@ -39,6 +67,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       theme: 'dark',
       onboardingComplete: true,
       isPremium: false,
+      allowedApps,
     });
     onComplete();
   };
@@ -119,6 +148,61 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
             </View>
           </View>
         );
+      case 3:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepEmoji}>{'\u{1F512}'}</Text>
+            <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
+              Focus Mode Apps
+            </Text>
+            <Text style={[styles.stepDesc, { color: theme.colors.textSecondary }]}>
+              Choose up to 3 apps accessible during focus sessions.
+              Phone and Messages are always allowed.
+            </Text>
+            <View style={styles.appsGrid}>
+              {FOCUS_APPS.map(app => {
+                const isSelected = allowedApps.includes(app.id);
+                const isLocked = app.locked;
+                return (
+                  <TouchableOpacity
+                    key={app.id}
+                    style={[
+                      styles.appCard,
+                      {
+                        backgroundColor: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.surface,
+                        borderColor: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                        opacity: isLocked ? 0.8 : 1,
+                      },
+                    ]}
+                    onPress={() => toggleApp(app.id)}
+                    activeOpacity={0.7}
+                    disabled={isLocked}>
+                    <Text style={styles.appEmoji}>{app.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.appLabel,
+                        { color: isSelected ? '#FFF' : theme.colors.text },
+                      ]}>
+                      {app.label}
+                    </Text>
+                    {isLocked && (
+                      <Text style={[styles.appRequired, { color: isSelected ? '#FFF' : theme.colors.textMuted }]}>
+                        Required
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.appNote, { color: theme.colors.textMuted }]}>
+              {allowedApps.length}/3 apps selected
+            </Text>
+          </View>
+        );
       default:
         return null;
     }
@@ -128,7 +212,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Progress indicator */}
       <View style={styles.progressContainer}>
-        {[0, 1, 2].map(i => (
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
           <View
             key={i}
             style={[
@@ -171,12 +255,12 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
             },
           ]}
           onPress={() => {
-            if (step < 2) setStep(s => s + 1);
+            if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
             else handleFinish();
           }}
           disabled={!canProceed()}>
           <Text style={styles.nextButtonText}>
-            {step < 2 ? 'Continue' : "Let's Go!"}
+            {step < TOTAL_STEPS - 1 ? 'Continue' : "Let's Go!"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -187,7 +271,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   progressContainer: {
     flexDirection: 'row',
@@ -202,42 +286,44 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   scrollContent: {
-    flexGrow: 1,
     paddingHorizontal: 24,
+    paddingBottom: 20,
   },
   stepContainer: {
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 20,
   },
   stepEmoji: {
     fontSize: 56,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   stepTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     textAlign: 'center',
     marginBottom: 8,
   },
   stepDesc: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
     lineHeight: 22,
+    paddingHorizontal: 12,
   },
   goalsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 12,
+    gap: 10,
     width: '100%',
   },
   goalCard: {
-    width: (width - 72) / 3,
+    width: (width - 76) / 3,
     paddingVertical: 16,
     borderRadius: 16,
-    alignItems: 'center',
     borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goalEmoji: {
     fontSize: 28,
@@ -246,19 +332,56 @@ const styles = StyleSheet.create({
   goalLabel: {
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  appsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  appCard: {
+    width: (width - 76) / 3,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appEmoji: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  appLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  appRequired: {
+    fontSize: 9,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  appNote: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 16,
   },
   buttonContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 16,
     gap: 12,
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    paddingTop: 12,
   },
   backButton: {
+    paddingHorizontal: 24,
     paddingVertical: 16,
-    paddingHorizontal: 28,
     borderRadius: 16,
     borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backButtonText: {
     fontSize: 16,
@@ -269,6 +392,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   nextButtonText: {
     color: '#FFF',

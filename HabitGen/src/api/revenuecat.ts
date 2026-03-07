@@ -1,10 +1,11 @@
 import Purchases, {
   CustomerInfo,
   LOG_LEVEL,
+  PurchasesOfferings,
 } from 'react-native-purchases';
 
 const API_KEY = 'test_ghPtiGxQAYDDKQKmwpcDeivBIHN';
-const ENTITLEMENT_ID = 'premium';
+const ENTITLEMENT_ID = 'HabitGen Pro';
 
 type CustomerInfoCallback = (info: CustomerInfo) => void;
 
@@ -47,11 +48,22 @@ class RevenueCatService {
 
   isPremium(): boolean {
     if (!this.customerInfo) return false;
-    return !!this.customerInfo.entitlements.active[ENTITLEMENT_ID];
+    // Check for our entitlement
+    const active = this.customerInfo.entitlements.active;
+    return !!(active[ENTITLEMENT_ID] || active.premium || active['pro']);
   }
 
   getCustomerInfo(): CustomerInfo | null {
     return this.customerInfo;
+  }
+
+  async getOfferings(): Promise<PurchasesOfferings | null> {
+    try {
+      return await Purchases.getOfferings();
+    } catch (e) {
+      console.warn('[RevenueCat] Get offerings failed:', e);
+      return null;
+    }
   }
 
   onCustomerInfoUpdate(cb: CustomerInfoCallback): () => void {
@@ -65,6 +77,7 @@ class RevenueCatService {
     try {
       const result = await Purchases.logIn(userId);
       this.customerInfo = result.customerInfo;
+      this.listeners.forEach(cb => cb(result.customerInfo));
     } catch (e) {
       console.warn('[RevenueCat] Login failed:', e);
     }
@@ -74,6 +87,7 @@ class RevenueCatService {
     try {
       const info = await Purchases.logOut();
       this.customerInfo = info;
+      this.listeners.forEach(cb => cb(info));
     } catch (e) {
       console.warn('[RevenueCat] Logout failed:', e);
     }
@@ -83,14 +97,28 @@ class RevenueCatService {
     try {
       const info = await Purchases.restorePurchases();
       this.customerInfo = info;
+      this.listeners.forEach(cb => cb(info));
       return this.isPremium();
     } catch {
       return false;
     }
   }
 
+  async syncPurchases(): Promise<void> {
+    try {
+      await Purchases.syncPurchases();
+      await this.refreshCustomerInfo();
+    } catch (e) {
+      console.warn('[RevenueCat] Sync failed:', e);
+    }
+  }
+
   isInitialized(): boolean {
     return this.initialized;
+  }
+
+  getEntitlementId(): string {
+    return ENTITLEMENT_ID;
   }
 }
 

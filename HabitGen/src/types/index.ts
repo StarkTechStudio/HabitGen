@@ -10,6 +10,7 @@ export interface UserPreferences {
   theme: ThemeMode;
   onboardingComplete: boolean;
   isPremium: boolean;
+  allowedApps?: string[];
 }
 
 export interface Habit {

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -13,8 +12,6 @@ import { useHabits } from '../context/HabitContext';
 import DurationScrollWheel from './DurationScrollWheel';
 import FocusOverlay from './FocusOverlay';
 import { screenLock } from '../api/screenlock';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface TimerScreenProps {
   habitId: string;
@@ -43,22 +40,20 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [breakTimeLeft, setBreakTimeLeft] = useState(0);
 
-  // Break button tracking
-  const [totalBreaks, setTotalBreaks] = useState(0);
-  const [usedBreaks, setUsedBreaks] = useState(0);
-  const [currentSlotBreaks, setCurrentSlotBreaks] = useState(0);
+  // Break tracking: each 30-min slot gets 1 break
+  // breakSlots[i] = true means break for that slot was taken or expired
+  const [breakSlots, setBreakSlots] = useState<boolean[]>([]);
+  const totalDurationRef = useRef(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const breakIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Calculate total break slots for the duration
-  const getBreaksForDuration = useCallback((durationMin: number): number => {
+  const getBreakCount = useCallback((durationMin: number): number => {
     return Math.floor(durationMin / 30);
   }, []);
 
-  // Start timer
   const handleStart = () => {
-    const totalBreaksAvail = getBreaksForDuration(selectedDuration);
+    const breakCount = getBreakCount(selectedDuration);
     Alert.alert(
       'Start Focus Session',
       `${habit?.emoji} ${habit?.name} \u{2022} ${selectedDuration} min\n\n` +
@@ -66,7 +61,8 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
         '\u{2705} Phone and SMS are allowed\n' +
         '\u{2705} One additional app of your choice\n' +
         '\u{274C} Social media apps are blocked\n\n' +
-        `You'll get ${totalBreaksAvail} break(s) of 5 min each.\n\n` +
+        `You'll get ${breakCount} break(s) of 5 min each.\n` +
+        'Breaks expire when the next 30-min slot begins.\n\n' +
         'Stopping early will decrease your streak by 1.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -74,9 +70,8 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
           text: 'Start Focus',
           onPress: () => {
             screenLock.requestPermission().then(() => {
-              setTotalBreaks(totalBreaksAvail);
-              setUsedBreaks(0);
-              setCurrentSlotBreaks(0);
+              totalDurationRef.current = selectedDuration;
+              setBreakSlots(Array(breakCount).fill(false));
               setTimeLeft(selectedDuration * 60);
               setIsRunning(true);
               setShowFocusOverlay(true);
@@ -88,13 +83,12 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     );
   };
 
-  // Timer countdown
+  // Main timer countdown
   useEffect(() => {
     if (isRunning && !isOnBreak && timeLeft > 0) {
       intervalRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            // Timer complete - unlock and add streak
             clearInterval(intervalRef.current!);
             setIsRunning(false);
             setShowFocusOverlay(false);
@@ -116,12 +110,7 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     };
   }, [isRunning, isOnBreak, timeLeft, habit, habitId, onClose, stopTimer]);
 
-  // Calculate elapsed minutes for break availability
-  const elapsedMinutes = selectedDuration - Math.ceil(timeLeft / 60);
-  const currentSlot = Math.floor(elapsedMinutes / 30);
-  const breakAvailableForSlot = currentSlot > usedBreaks && usedBreaks < totalBreaks;
-
-  // Break countdown
+  // Break timer countdown
   useEffect(() => {
     if (isOnBreak && breakTimeLeft > 0) {
       breakIntervalRef.current = setInterval(() => {
@@ -140,10 +129,56 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     };
   }, [isOnBreak, breakTimeLeft]);
 
-  const handleTakeBreak = () => {
+  // Calculate which break slot is currently active
+  const elapsedSeconds = totalDurationRef.current * 60 - timeLeft;
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  // Current slot index (0-based): after 30 min = slot 0, after 60 min = slot 1, etc.
+  const currentSlotIndex = Math.floor(elapsedMinutes / 30);
+  // The break for slot i is available once we pass minute i*30+30 (slot boundary)
+  // Break i becomes available at minute (i+1)*30 and expires at minute (i+2)*30
+
+  // Find which break buttons to show
+  const availableBreaks: number[] = [];
+  if (isRunning && !isOnBreak) {
+    for (let i = 0; i < breakSlots.length; i++) {
+      const slotStartMin = (i + 1) * 30;
+      const slotExpireMin = (i + 2) * 30;
+      // Break is available after its 30-min mark and not yet expired
+      if (
+        elapsedMinutes >= slotStartMin &&
+        elapsedMinutes < slotExpireMin &&
+        !breakSlots[i]
+      ) {
+        availableBreaks.push(i);
+      }
+    }
+  }
+
+  // Auto-expire breaks that have passed their window
+  useEffect(() => {
+    if (!isRunning || isOnBreak) return;
+    setBreakSlots(prev => {
+      const updated = [...prev];
+      let changed = false;
+      for (let i = 0; i < updated.length; i++) {
+        const slotExpireMin = (i + 2) * 30;
+        if (elapsedMinutes >= slotExpireMin && !updated[i]) {
+          updated[i] = true; // expired
+          changed = true;
+        }
+      }
+      return changed ? updated : prev;
+    });
+  }, [elapsedMinutes, isRunning, isOnBreak]);
+
+  const handleTakeBreak = (slotIndex: number) => {
+    setBreakSlots(prev => {
+      const updated = [...prev];
+      updated[slotIndex] = true;
+      return updated;
+    });
     setIsOnBreak(true);
-    setBreakTimeLeft(5 * 60); // 5 minute break
-    setUsedBreaks(prev => prev + 1);
+    setBreakTimeLeft(5 * 60);
   };
 
   const handleStopEarly = () => {
@@ -174,9 +209,12 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
 
   // Running state
   if (isRunning) {
+    const totalBreakCount = breakSlots.length;
+    const usedBreakCount = breakSlots.filter(Boolean).length;
+
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Focus overlay in foreground */}
+        {/* Focus overlay */}
         <FocusOverlay
           isActive={showFocusOverlay && !isOnBreak}
           habitName={habit.name}
@@ -199,21 +237,30 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
               Timer is paused. Relax and recharge!
             </Text>
             <Text style={[styles.breakInfo, { color: theme.colors.textMuted }]}>
-              Timer will automatically resume when break ends.
+              Timer will resume automatically when break ends.
             </Text>
           </View>
         )}
 
-        {/* Break button floating above focus overlay */}
-        {!isOnBreak && breakAvailableForSlot && (
+        {/* Break buttons floating above focus overlay */}
+        {!isOnBreak && availableBreaks.length > 0 && (
           <View style={styles.breakButtonContainer}>
-            <TouchableOpacity
-              style={[styles.breakButton, { backgroundColor: theme.colors.success + '20', borderColor: theme.colors.success }]}
-              onPress={handleTakeBreak}>
-              <Text style={[styles.breakButtonText, { color: theme.colors.success }]}>
-                {'\u{2615}'} Take 5 min Break ({usedBreaks}/{totalBreaks} used)
-              </Text>
-            </TouchableOpacity>
+            {availableBreaks.map(slotIdx => (
+              <TouchableOpacity
+                key={slotIdx}
+                style={[
+                  styles.breakButton,
+                  {
+                    backgroundColor: theme.colors.success + '20',
+                    borderColor: theme.colors.success,
+                  },
+                ]}
+                onPress={() => handleTakeBreak(slotIdx)}>
+                <Text style={[styles.breakButtonText, { color: theme.colors.success }]}>
+                  {'\u{2615}'} Take 5 min Break ({usedBreakCount}/{totalBreakCount} used)
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </View>
@@ -223,7 +270,6 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   // Setup state
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose}>
           <Text style={[styles.closeText, { color: theme.colors.textSecondary }]}>
@@ -236,7 +282,6 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
         <View style={{ width: 50 }} />
       </View>
 
-      {/* Habit info */}
       <View style={styles.habitInfo}>
         <Text style={styles.habitEmoji}>{habit.emoji}</Text>
         <Text style={[styles.habitName, { color: theme.colors.text }]}>
@@ -244,7 +289,6 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
         </Text>
       </View>
 
-      {/* Preset durations */}
       <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
         Quick Select
       </Text>
@@ -271,9 +315,7 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
                 styles.presetText,
                 {
                   color:
-                    selectedDuration === preset
-                      ? '#FFF'
-                      : theme.colors.text,
+                    selectedDuration === preset ? '#FFF' : theme.colors.text,
                 },
               ]}>
               {preset} min
@@ -282,26 +324,18 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
         ))}
       </View>
 
-      {/* Custom duration scroll */}
-      <DurationScrollWheel
-        value={selectedDuration}
-        onChange={setSelectedDuration}
-      />
+      <DurationScrollWheel value={selectedDuration} onChange={setSelectedDuration} />
 
-      {/* Start button */}
       <View style={styles.startSection}>
         <TouchableOpacity
-          style={[
-            styles.startButton,
-            { backgroundColor: theme.colors.primary },
-          ]}
+          style={[styles.startButton, { backgroundColor: theme.colors.primary }]}
           onPress={handleStart}>
           <Text style={styles.startButtonText}>
             Start Focus {'\u{2022}'} {selectedDuration} min
           </Text>
         </TouchableOpacity>
         <Text style={[styles.breakNote, { color: theme.colors.textMuted }]}>
-          {getBreaksForDuration(selectedDuration)} break(s) available {'\u{2022}'} 5 min each
+          {getBreakCount(selectedDuration)} break(s) available {'\u{2022}'} 5 min each
         </Text>
       </View>
     </View>
@@ -372,7 +406,12 @@ const styles = StyleSheet.create({
   },
   breakEmoji: { fontSize: 64, marginBottom: 16 },
   breakTitle: { fontSize: 28, fontWeight: '800', marginBottom: 12 },
-  breakTimer: { fontSize: 56, fontWeight: '200', fontVariant: ['tabular-nums'] as any, marginBottom: 16 },
+  breakTimer: {
+    fontSize: 56,
+    fontWeight: '200',
+    fontVariant: ['tabular-nums'] as any,
+    marginBottom: 16,
+  },
   breakSubtext: { fontSize: 16, textAlign: 'center', marginBottom: 8 },
   breakInfo: { fontSize: 13, textAlign: 'center' },
   breakButtonContainer: {
@@ -381,6 +420,7 @@ const styles = StyleSheet.create({
     left: 24,
     right: 24,
     zIndex: 10001,
+    gap: 8,
   },
   breakButton: {
     paddingVertical: 14,

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../api/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { revenueCatService } from '../api/revenuecat';
 
 interface AuthContextType {
   user: User | null;
@@ -22,6 +23,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
+      // Sync RevenueCat user ID with Supabase user
+      if (s?.user?.id) {
+        revenueCatService.logIn(s.user.id);
+      }
       setLoading(false);
     });
 
@@ -29,6 +34,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);
+        // Sync on auth state change
+        if (s?.user?.id) {
+          revenueCatService.logIn(s.user.id);
+        } else {
+          revenueCatService.logOut();
+        }
       },
     );
 
@@ -47,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    await revenueCatService.logOut();
   }, []);
 
   return (
