@@ -231,7 +231,8 @@ const JourneyScreen: React.FC = () => {
               styles.journeyCard,
               {
                 backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
+                borderColor: isPremium ? theme.colors.primary + '40' : theme.colors.border,
+                opacity: isPremium ? 1 : 0.75,
               },
             ]}
             activeOpacity={0.7}
@@ -298,7 +299,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     alignItems: 'flex-start',
-    opacity: 0.65,
   },
   journeyEmoji: { fontSize: 36, marginRight: 14 },
   journeyInfo: { flex: 1 },
@@ -323,7 +323,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    opacity: 0.65,
   },
   daysText: { fontSize: 12, fontWeight: '500' },
   startText: { fontSize: 13, fontWeight: '700' },
