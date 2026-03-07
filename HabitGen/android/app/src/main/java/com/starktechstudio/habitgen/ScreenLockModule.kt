@@ -14,12 +14,11 @@ class ScreenLockModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun startLockTask() {
-        val activity: Activity? = currentActivity
+        val activity: Activity? = reactApplicationContext.currentActivity
         activity?.runOnUiThread {
             try {
                 activity.startLockTask()
             } catch (e: Exception) {
-                // Screen pinning may not be available on all devices
                 e.printStackTrace()
             }
         }
@@ -27,7 +26,7 @@ class ScreenLockModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun stopLockTask() {
-        val activity: Activity? = currentActivity
+        val activity: Activity? = reactApplicationContext.currentActivity
         activity?.runOnUiThread {
             try {
                 activity.stopLockTask()
