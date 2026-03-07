@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import PremiumScreen from '../../components/PremiumScreen';
-import { storage } from '../../utils/storage';
+import { usePremium } from '../../../App';
 
 interface Journey {
   id: string;
@@ -166,6 +166,7 @@ const journeys: Journey[] = [
 
 const JourneyScreen: React.FC = () => {
   const { theme } = useTheme();
+  const { isPremium, refreshPremium } = usePremium();
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
 
@@ -175,7 +176,7 @@ const JourneyScreen: React.FC = () => {
         onClose={() => setShowPaywall(false)}
         onPurchased={() => {
           setShowPaywall(false);
-          storage.updateUserPreferences({ isPremium: true });
+          refreshPremium();
           if (selectedJourney) {
             Alert.alert(
               'Journey Unlocked!',
@@ -189,17 +190,28 @@ const JourneyScreen: React.FC = () => {
 
   const handleJourneyPress = (journey: Journey) => {
     setSelectedJourney(journey);
-    Alert.alert(
-      `${journey.emoji} ${journey.title}`,
-      `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nThis is a Premium feature.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unlock Premium',
-          onPress: () => setShowPaywall(true),
-        },
-      ],
-    );
+    if (isPremium) {
+      Alert.alert(
+        `${journey.emoji} ${journey.title}`,
+        `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}`,
+        [
+          { text: 'Close', style: 'cancel' },
+          { text: 'Start Journey', onPress: () => Alert.alert('Coming Soon', 'Journey tracking is being developed.') },
+        ],
+      );
+    } else {
+      Alert.alert(
+        `${journey.emoji} ${journey.title}`,
+        `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nThis is a Premium feature.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Unlock Premium',
+            onPress: () => setShowPaywall(true),
+          },
+        ],
+      );
+    }
   };
 
   return (
@@ -231,11 +243,13 @@ const JourneyScreen: React.FC = () => {
                   <Text style={[styles.journeyTitle, { color: theme.colors.text }]} numberOfLines={1}>
                     {journey.title}
                   </Text>
-                  <View style={[styles.premiumBadge, { backgroundColor: theme.colors.accent + '20' }]}>
-                    <Text style={[styles.premiumText, { color: theme.colors.accent }]}>
-                      {'\u{1F512}'} PRO
-                    </Text>
-                  </View>
+                  {!isPremium && (
+                    <View style={[styles.premiumBadge, { backgroundColor: theme.colors.accent + '20' }]}>
+                      <Text style={[styles.premiumText, { color: theme.colors.accent }]}>
+                        {'\u{1F512}'} PRO
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={[styles.journeyDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
                   {journey.description}
@@ -249,14 +263,16 @@ const JourneyScreen: React.FC = () => {
               <Text style={[styles.daysText, { color: theme.colors.textMuted }]}>
                 {journey.days} days
               </Text>
-              <Text style={[styles.startText, { color: theme.colors.accent }]}>
-                Unlock {'\u{2192}'}
+              <Text style={[styles.startText, { color: isPremium ? theme.colors.success : theme.colors.accent }]}>
+                {isPremium ? 'Start \u{2192}' : 'Unlock \u{2192}'}
               </Text>
             </View>
-            {/* Locked overlay */}
-            <View style={styles.lockIcon}>
-              <Text style={{ fontSize: 16 }}>{'\u{1F512}'}</Text>
-            </View>
+            {/* Locked overlay - only for non-premium */}
+            {!isPremium && (
+              <View style={styles.lockIcon}>
+                <Text style={{ fontSize: 16 }}>{'\u{1F512}'}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         ))}
 

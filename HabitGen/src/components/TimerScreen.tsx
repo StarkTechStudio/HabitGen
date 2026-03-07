@@ -1,158 +1,64 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
-import { formatTime } from '../utils/helpers';
-import { DEFAULT_SESSION_PRESETS } from '../types';
-import { screenLock } from '../api/screenlock';
 import DurationScrollWheel from './DurationScrollWheel';
 import FocusOverlay from './FocusOverlay';
+import { screenLock } from '../api/screenlock';
 
-const { width } = Dimensions.get('window');
-const TIMER_SIZE = width * 0.65;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface TimerScreenProps {
   habitId: string;
   onClose: () => void;
 }
 
+const formatTime = (totalSec: number): string => {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+};
+
 const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   const { theme } = useTheme();
-  const { habits, timerState, startTimer, stopTimer, tickTimer, startBreak } = useHabits();
+  const { habits, startTimer, stopTimer } = useHabits();
   const habit = habits.find(h => h.id === habitId);
+
   const [selectedDuration, setSelectedDuration] = useState(
-    habit?.sessionPresets[0] || 30,
+    habit?.sessionPresets?.[0] || 25,
   );
-  const [showCustomWheel, setShowCustomWheel] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
   const [showFocusOverlay, setShowFocusOverlay] = useState(false);
-  const [breakAvailable, setBreakAvailable] = useState(false);
-  const [breakExpired, setBreakExpired] = useState(false);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const lastBreakOfferedAt = useRef(0);
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [breakTimeLeft, setBreakTimeLeft] = useState(0);
 
-  const isRunning = timerState?.habitId === habitId && timerState.isRunning;
-  const isBreak = timerState?.breakMode || false;
+  // Break button tracking
+  const [totalBreaks, setTotalBreaks] = useState(0);
+  const [usedBreaks, setUsedBreaks] = useState(0);
+  const [currentSlotBreaks, setCurrentSlotBreaks] = useState(0);
 
-  // Tick timer every second
-  useEffect(() => {
-    if (!isRunning) return;
-    const interval = setInterval(tickTimer, 1000);
-    return () => clearInterval(interval);
-  }, [isRunning, tickTimer]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const breakIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Show focus overlay when timer starts (not during break)
-  useEffect(() => {
-    if (isRunning && !isBreak) {
-      setShowFocusOverlay(true);
-    } else if (isBreak) {
-      setShowFocusOverlay(false);
-    }
-  }, [isRunning, isBreak]);
+  // Calculate total break slots for the duration
+  const getBreaksForDuration = useCallback((durationMin: number): number => {
+    return Math.floor(durationMin / 30);
+  }, []);
 
-  // Check for 30-minute break availability and auto-expiry
-  useEffect(() => {
-    if (!timerState || !isRunning || isBreak) return;
-
-    const elapsed = timerState.totalSeconds - timerState.remainingSeconds;
-    const elapsedMins = elapsed / 60;
-    const breakInterval = 30;
-    const currentBreakWindow = Math.floor(elapsedMins / breakInterval);
-
-    // New 30-min window reached and not the initial one
-    if (currentBreakWindow > 0 && currentBreakWindow > lastBreakOfferedAt.current) {
-      // Offer break
-      lastBreakOfferedAt.current = currentBreakWindow;
-      setBreakAvailable(true);
-      setBreakExpired(false);
-
-      // Auto-expire break after the window passes (next 30-min block)
-      // Break is available until the next 30 seconds
-      const timeoutId = setTimeout(() => {
-        setBreakAvailable(false);
-        setBreakExpired(true);
-      }, 30000); // 30 seconds to accept break
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [timerState, isRunning, isBreak]);
-
-  // Auto-popup break offer
-  useEffect(() => {
-    if (breakAvailable && isRunning && !isBreak) {
-      Alert.alert(
-        'Break Time!',
-        'You\'ve been focused for 30 minutes. Take a 5-minute break?\n\nThis offer expires soon.',
-        [
-          {
-            text: 'Skip Break',
-            style: 'cancel',
-            onPress: () => {
-              setBreakAvailable(false);
-              setBreakExpired(true);
-            },
-          },
-          {
-            text: 'Take 5 min Break',
-            onPress: () => {
-              setBreakAvailable(false);
-              setBreakExpired(false);
-              setShowFocusOverlay(false);
-              startBreak();
-            },
-          },
-        ],
-      );
-    }
-  }, [breakAvailable, isRunning, isBreak, startBreak]);
-
-  // Timer completion check
-  useEffect(() => {
-    if (
-      timerState?.habitId === habitId &&
-      !timerState.isRunning &&
-      timerState.remainingSeconds === 0
-    ) {
-      setShowFocusOverlay(false);
-      screenLock.stopLock();
-      if (timerState.breakMode) {
-        Alert.alert('Break Over!', 'Your 5-minute break is done. Focus mode will resume.', [
-          { text: 'OK' },
-        ]);
-      } else {
-        stopTimer(true);
-        Alert.alert(
-          'Session Complete!',
-          `Great job! You completed your ${habit?.emoji} ${habit?.name} session.\n\nYour streak has been increased by 1!`,
-          [{ text: 'Done', onPress: onClose }],
-        );
-      }
-    }
-  }, [timerState, habitId, habit, stopTimer, onClose]);
-
-  // Pulse animation
-  useEffect(() => {
-    if (isRunning) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        ]),
-      );
-      pulse.start();
-      return () => pulse.stop();
-    }
-    pulseAnim.setValue(1);
-  }, [isRunning, pulseAnim]);
-
+  // Start timer
   const handleStart = () => {
+    const totalBreaksAvail = getBreaksForDuration(selectedDuration);
     Alert.alert(
       'Start Focus Session',
       `${habit?.emoji} ${habit?.name} \u{2022} ${selectedDuration} min\n\n` +
@@ -160,20 +66,84 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
         '\u{2705} Phone and SMS are allowed\n' +
         '\u{2705} One additional app of your choice\n' +
         '\u{274C} Social media apps are blocked\n\n' +
-        'You can stop and unlock anytime, but stopping early will decrease your streak by 1.',
+        `You'll get ${totalBreaksAvail} break(s) of 5 min each.\n\n` +
+        'Stopping early will decrease your streak by 1.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Start Focus',
           onPress: () => {
             screenLock.requestPermission().then(() => {
-              lastBreakOfferedAt.current = 0;
+              setTotalBreaks(totalBreaksAvail);
+              setUsedBreaks(0);
+              setCurrentSlotBreaks(0);
+              setTimeLeft(selectedDuration * 60);
+              setIsRunning(true);
+              setShowFocusOverlay(true);
               startTimer(habitId, selectedDuration);
             });
           },
         },
       ],
     );
+  };
+
+  // Timer countdown
+  useEffect(() => {
+    if (isRunning && !isOnBreak && timeLeft > 0) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            // Timer complete - unlock and add streak
+            clearInterval(intervalRef.current!);
+            setIsRunning(false);
+            setShowFocusOverlay(false);
+            screenLock.stopLock();
+            stopTimer(true);
+            Alert.alert(
+              'Session Complete!',
+              `${habit?.emoji} Great job! Your streak has been increased by 1.`,
+              [{ text: 'Done', onPress: onClose }],
+            );
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isRunning, isOnBreak, timeLeft, habit, habitId, onClose, stopTimer]);
+
+  // Calculate elapsed minutes for break availability
+  const elapsedMinutes = selectedDuration - Math.ceil(timeLeft / 60);
+  const currentSlot = Math.floor(elapsedMinutes / 30);
+  const breakAvailableForSlot = currentSlot > usedBreaks && usedBreaks < totalBreaks;
+
+  // Break countdown
+  useEffect(() => {
+    if (isOnBreak && breakTimeLeft > 0) {
+      breakIntervalRef.current = setInterval(() => {
+        setBreakTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(breakIntervalRef.current!);
+            setIsOnBreak(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
+    };
+  }, [isOnBreak, breakTimeLeft]);
+
+  const handleTakeBreak = () => {
+    setIsOnBreak(true);
+    setBreakTimeLeft(5 * 60); // 5 minute break
+    setUsedBreaks(prev => prev + 1);
   };
 
   const handleStopEarly = () => {
@@ -186,6 +156,10 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
           text: 'Stop & Lose Streak',
           style: 'destructive',
           onPress: () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
+            setIsRunning(false);
+            setIsOnBreak(false);
             setShowFocusOverlay(false);
             screenLock.stopLock();
             stopTimer(false);
@@ -196,184 +170,225 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     );
   };
 
-  const progress = timerState
-    ? 1 - timerState.remainingSeconds / timerState.totalSeconds
-    : 0;
+  if (!habit) return null;
 
-  if (!habit) {
+  // Running state
+  if (isRunning) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <Text style={[styles.errorText, { color: theme.colors.error }]}>Habit not found</Text>
+        {/* Focus overlay in foreground */}
+        <FocusOverlay
+          isActive={showFocusOverlay && !isOnBreak}
+          habitName={habit.name}
+          habitEmoji={habit.emoji}
+          timeRemaining={formatTime(timeLeft)}
+          onRequestStop={handleStopEarly}
+        />
+
+        {/* Break overlay */}
+        {isOnBreak && (
+          <View style={[styles.breakOverlay, { backgroundColor: theme.colors.background }]}>
+            <Text style={styles.breakEmoji}>{'\u{2615}'}</Text>
+            <Text style={[styles.breakTitle, { color: theme.colors.text }]}>
+              Break Time
+            </Text>
+            <Text style={[styles.breakTimer, { color: theme.colors.success }]}>
+              {formatTime(breakTimeLeft)}
+            </Text>
+            <Text style={[styles.breakSubtext, { color: theme.colors.textSecondary }]}>
+              Timer is paused. Relax and recharge!
+            </Text>
+            <Text style={[styles.breakInfo, { color: theme.colors.textMuted }]}>
+              Timer will automatically resume when break ends.
+            </Text>
+          </View>
+        )}
+
+        {/* Break button floating above focus overlay */}
+        {!isOnBreak && breakAvailableForSlot && (
+          <View style={styles.breakButtonContainer}>
+            <TouchableOpacity
+              style={[styles.breakButton, { backgroundColor: theme.colors.success + '20', borderColor: theme.colors.success }]}
+              onPress={handleTakeBreak}>
+              <Text style={[styles.breakButtonText, { color: theme.colors.success }]}>
+                {'\u{2615}'} Take 5 min Break ({usedBreaks}/{totalBreaks} used)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   }
 
+  // Setup state
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <FocusOverlay
-        isActive={showFocusOverlay}
-        habitName={habit.name}
-        habitEmoji={habit.emoji}
-        timeRemaining={formatTime(timerState?.remainingSeconds || 0)}
-        onRequestStop={handleStopEarly}
-      />
-
       {/* Header */}
       <View style={styles.header}>
-        {!isRunning && (
-          <TouchableOpacity onPress={onClose}>
-            <Text style={[styles.backText, { color: theme.colors.textSecondary }]}>
-              {'\u{2190}'} Back
-            </Text>
-          </TouchableOpacity>
-        )}
-        <View style={{ flex: 1 }} />
-        {isRunning && (
-          <View style={[styles.focusBadge, { backgroundColor: theme.colors.primary + '15' }]}>
-            <Text style={[styles.focusText, { color: theme.colors.primary }]}>
-              {isBreak ? '\u{2615} Break' : '\u{1F512} Focus Mode'}
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity onPress={onClose}>
+          <Text style={[styles.closeText, { color: theme.colors.textSecondary }]}>
+            Cancel
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+          Focus Session
+        </Text>
+        <View style={{ width: 50 }} />
       </View>
 
       {/* Habit info */}
       <View style={styles.habitInfo}>
         <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-        <Text style={[styles.habitName, { color: theme.colors.text }]}>{habit.name}</Text>
+        <Text style={[styles.habitName, { color: theme.colors.text }]}>
+          {habit.name}
+        </Text>
       </View>
 
-      {/* Timer display */}
-      {isRunning || (timerState?.remainingSeconds === 0 && timerState?.habitId === habitId) ? (
-        <Animated.View
-          style={[
-            styles.timerCircle,
-            {
-              borderColor: isBreak ? theme.colors.accent : theme.colors.primary,
-              transform: [{ scale: pulseAnim }],
-            },
-          ]}>
-          <Text
-            style={[styles.timerText, { color: isBreak ? theme.colors.accent : theme.colors.primary }]}>
-            {formatTime(timerState?.remainingSeconds || 0)}
-          </Text>
-          <Text style={[styles.timerLabel, { color: theme.colors.textMuted }]}>
-            {isBreak ? 'break remaining' : 'remaining'}
-          </Text>
-          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.surfaceVariant }]}>
-            <View
-              style={[styles.progressBarFill, {
-                backgroundColor: isBreak ? theme.colors.accent : theme.colors.primary,
-                width: `${progress * 100}%`,
-              }]}
-            />
-          </View>
-        </Animated.View>
-      ) : (
-        <View style={styles.durationPicker}>
-          <Text style={[styles.selectLabel, { color: theme.colors.textSecondary }]}>
-            Select Duration
-          </Text>
-          <View style={styles.presetsRow}>
-            {(habit.sessionPresets.length > 0 ? habit.sessionPresets : DEFAULT_SESSION_PRESETS).map(mins => (
-              <TouchableOpacity
-                key={mins}
-                style={[styles.presetChip, {
-                  backgroundColor: selectedDuration === mins && !showCustomWheel ? theme.colors.primary : theme.colors.surface,
-                  borderColor: selectedDuration === mins && !showCustomWheel ? theme.colors.primary : theme.colors.border,
-                }]}
-                onPress={() => { setSelectedDuration(mins); setShowCustomWheel(false); }}>
-                <Text style={[styles.presetText, {
-                  color: selectedDuration === mins && !showCustomWheel ? '#FFF' : theme.colors.text,
-                }]}>
-                  {mins} min
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={[styles.presetChip, {
-                backgroundColor: showCustomWheel ? theme.colors.primary : theme.colors.surface,
-                borderColor: showCustomWheel ? theme.colors.primary : theme.colors.border,
-              }]}
-              onPress={() => setShowCustomWheel(!showCustomWheel)}>
-              <Text style={[styles.presetText, { color: showCustomWheel ? '#FFF' : theme.colors.text }]}>
-                Custom
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {showCustomWheel && (
-            <DurationScrollWheel value={selectedDuration} onChange={setSelectedDuration} />
-          )}
-        </View>
-      )}
-
-      {/* Actions */}
-      <View style={styles.actionsContainer}>
-        {isRunning ? (
-          <View style={styles.runningActions}>
-            {isBreak ? (
-              <Text style={[styles.breakNote, { color: theme.colors.accent }]}>
-                {'\u{2615}'} Enjoy your break!
-              </Text>
-            ) : null}
-            <TouchableOpacity
-              style={[styles.stopButton, { backgroundColor: theme.colors.error + '10', borderColor: theme.colors.error + '60' }]}
-              onPress={handleStopEarly}>
-              <Text style={[styles.stopButtonText, { color: theme.colors.error }]}>
-                Stop & Unlock Screen
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+      {/* Preset durations */}
+      <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
+        Quick Select
+      </Text>
+      <View style={styles.presetRow}>
+        {(habit.sessionPresets || [25, 50, 90]).map(preset => (
           <TouchableOpacity
-            style={[styles.startButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handleStart}>
-            <Text style={styles.startButtonText}>
-              Start Focus {'\u{2022}'} {selectedDuration} min
+            key={preset}
+            onPress={() => setSelectedDuration(preset)}
+            style={[
+              styles.presetButton,
+              {
+                backgroundColor:
+                  selectedDuration === preset
+                    ? theme.colors.primary
+                    : theme.colors.surface,
+                borderColor:
+                  selectedDuration === preset
+                    ? theme.colors.primary
+                    : theme.colors.border,
+              },
+            ]}>
+            <Text
+              style={[
+                styles.presetText,
+                {
+                  color:
+                    selectedDuration === preset
+                      ? '#FFF'
+                      : theme.colors.text,
+                },
+              ]}>
+              {preset} min
             </Text>
           </TouchableOpacity>
-        )}
+        ))}
+      </View>
+
+      {/* Custom duration scroll */}
+      <DurationScrollWheel
+        value={selectedDuration}
+        onChange={setSelectedDuration}
+      />
+
+      {/* Start button */}
+      <View style={styles.startSection}>
+        <TouchableOpacity
+          style={[
+            styles.startButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={handleStart}>
+          <Text style={styles.startButtonText}>
+            Start Focus {'\u{2022}'} {selectedDuration} min
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.breakNote, { color: theme.colors.textMuted }]}>
+          {getBreaksForDuration(selectedDuration)} break(s) available {'\u{2022}'} 5 min each
+        </Text>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 56 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 },
-  backText: { fontSize: 16, fontWeight: '500' },
-  focusBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12 },
-  focusText: { fontSize: 13, fontWeight: '700' },
-  habitInfo: { alignItems: 'center', marginBottom: 24 },
-  habitEmoji: { fontSize: 52, marginBottom: 6 },
-  habitName: { fontSize: 22, fontWeight: '700' },
-  timerCircle: {
-    width: TIMER_SIZE,
-    height: TIMER_SIZE,
-    borderRadius: TIMER_SIZE / 2,
-    borderWidth: 5,
-    justifyContent: 'center',
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 20,
+    paddingBottom: 12,
+  },
+  closeText: { fontSize: 16, fontWeight: '500' },
+  headerTitle: { fontSize: 17, fontWeight: '700' },
+  habitInfo: { alignItems: 'center', marginVertical: 20 },
+  habitEmoji: { fontSize: 52, marginBottom: 8 },
+  habitName: { fontSize: 22, fontWeight: '700' },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 24,
+    marginBottom: 10,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 10,
     marginBottom: 24,
   },
-  timerText: { fontSize: 44, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  timerLabel: { fontSize: 13, marginTop: 4 },
-  progressBarBg: { width: '55%', height: 5, borderRadius: 3, marginTop: 14, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 3 },
-  durationPicker: { paddingHorizontal: 24, flex: 1 },
-  selectLabel: { fontSize: 15, fontWeight: '600', marginBottom: 14, textAlign: 'center' },
-  presetsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginBottom: 18 },
-  presetChip: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 },
+  presetButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+  },
   presetText: { fontSize: 15, fontWeight: '700' },
-  actionsContainer: { paddingHorizontal: 24, paddingBottom: 36 },
-  startButton: { paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
-  startButtonText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  runningActions: { gap: 10 },
-  breakNote: { fontSize: 15, fontWeight: '600', textAlign: 'center', marginBottom: 4 },
-  stopButton: { paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, alignItems: 'center' },
-  stopButtonText: { fontSize: 15, fontWeight: '700' },
-  errorText: { fontSize: 16, textAlign: 'center', marginTop: 40 },
+  startSection: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 24,
+  },
+  startButton: {
+    paddingVertical: 18,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  breakNote: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  breakOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  breakEmoji: { fontSize: 64, marginBottom: 16 },
+  breakTitle: { fontSize: 28, fontWeight: '800', marginBottom: 12 },
+  breakTimer: { fontSize: 56, fontWeight: '200', fontVariant: ['tabular-nums'] as any, marginBottom: 16 },
+  breakSubtext: { fontSize: 16, textAlign: 'center', marginBottom: 8 },
+  breakInfo: { fontSize: 13, textAlign: 'center' },
+  breakButtonContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 110 : 90,
+    left: 24,
+    right: 24,
+    zIndex: 10001,
+  },
+  breakButton: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  breakButtonText: { fontSize: 15, fontWeight: '700' },
 });
 
 export default TimerScreen;

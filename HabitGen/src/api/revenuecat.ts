@@ -1,61 +1,98 @@
-// RevenueCat Integration Placeholder
-// Replace with actual RevenueCat SDK when ready for production
-// npm install react-native-purchases
+import Purchases, {
+  CustomerInfo,
+  LOG_LEVEL,
+} from 'react-native-purchases';
 
-export interface PurchasePackage {
-  identifier: string;
-  product: {
-    title: string;
-    description: string;
-    priceString: string;
-  };
-}
+const API_KEY = 'test_ghPtiGxQAYDDKQKmwpcDeivBIHN';
+const ENTITLEMENT_ID = 'premium';
 
-const PREMIUM_OFFERING: PurchasePackage = {
-  identifier: 'habitgen_premium_monthly',
-  product: {
-    title: 'HabitGen Premium',
-    description: 'Unlock all features including difficulty, priority, and premium journeys',
-    priceString: '$4.99/month',
-  },
-};
+type CustomerInfoCallback = (info: CustomerInfo) => void;
 
 class RevenueCatService {
-  private isPremium = false;
+  private initialized = false;
+  private customerInfo: CustomerInfo | null = null;
+  private listeners: CustomerInfoCallback[] = [];
 
-  async configure(): Promise<void> {
-    // TODO: Replace with actual RevenueCat configuration
-    // Purchases.configure({ apiKey: 'YOUR_REVENUECAT_API_KEY' });
-    console.log('[RevenueCat] Placeholder configured');
+  async initialize(userId?: string): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      if (__DEV__) {
+        Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      }
+
+      Purchases.configure({ apiKey: API_KEY, appUserID: userId });
+      this.initialized = true;
+
+      Purchases.addCustomerInfoUpdateListener((info: CustomerInfo) => {
+        this.customerInfo = info;
+        this.listeners.forEach(cb => cb(info));
+      });
+
+      await this.refreshCustomerInfo();
+    } catch (e) {
+      console.warn('[RevenueCat] Init failed:', e);
+    }
   }
 
-  async checkPremiumStatus(): Promise<boolean> {
-    // TODO: Replace with actual entitlement check
-    // const customerInfo = await Purchases.getCustomerInfo();
-    // return customerInfo.entitlements.active['premium'] !== undefined;
-    return this.isPremium;
+  async refreshCustomerInfo(): Promise<CustomerInfo | null> {
+    try {
+      const info = await Purchases.getCustomerInfo();
+      this.customerInfo = info;
+      return info;
+    } catch {
+      return null;
+    }
   }
 
-  async getOfferings(): Promise<PurchasePackage[]> {
-    // TODO: Replace with actual offerings
-    // const offerings = await Purchases.getOfferings();
-    return [PREMIUM_OFFERING];
+  isPremium(): boolean {
+    if (!this.customerInfo) return false;
+    return !!this.customerInfo.entitlements.active[ENTITLEMENT_ID];
   }
 
-  async purchasePremium(): Promise<boolean> {
-    // TODO: Replace with actual purchase flow
-    // const { customerInfo } = await Purchases.purchasePackage(package);
-    console.log('[RevenueCat] Placeholder purchase triggered');
-    this.isPremium = true;
-    return true;
+  getCustomerInfo(): CustomerInfo | null {
+    return this.customerInfo;
+  }
+
+  onCustomerInfoUpdate(cb: CustomerInfoCallback): () => void {
+    this.listeners.push(cb);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== cb);
+    };
+  }
+
+  async logIn(userId: string): Promise<void> {
+    try {
+      const result = await Purchases.logIn(userId);
+      this.customerInfo = result.customerInfo;
+    } catch (e) {
+      console.warn('[RevenueCat] Login failed:', e);
+    }
+  }
+
+  async logOut(): Promise<void> {
+    try {
+      const info = await Purchases.logOut();
+      this.customerInfo = info;
+    } catch (e) {
+      console.warn('[RevenueCat] Logout failed:', e);
+    }
   }
 
   async restorePurchases(): Promise<boolean> {
-    // TODO: Replace with actual restore
-    // const customerInfo = await Purchases.restorePurchases();
-    console.log('[RevenueCat] Placeholder restore triggered');
-    return this.isPremium;
+    try {
+      const info = await Purchases.restorePurchases();
+      this.customerInfo = info;
+      return this.isPremium();
+    } catch {
+      return false;
+    }
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
   }
 }
 
-export const revenueCat = new RevenueCatService();
+export const revenueCatService = new RevenueCatService();
+export { ENTITLEMENT_ID };

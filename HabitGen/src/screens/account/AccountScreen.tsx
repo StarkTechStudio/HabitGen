@@ -13,11 +13,14 @@ import { storage } from '../../utils/storage';
 import { useHabits } from '../../context/HabitContext';
 import AuthScreen from '../../components/AuthScreen';
 import PremiumScreen from '../../components/PremiumScreen';
+import { usePremium } from '../../../App';
+import { revenueCatService } from '../../api/revenuecat';
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const { refreshData } = useHabits();
+  const { isPremium, refreshPremium } = usePremium();
   const [showAuth, setShowAuth] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
 
@@ -31,7 +34,7 @@ const AccountScreen: React.FC = () => {
         onClose={() => setShowPremium(false)}
         onPurchased={() => {
           setShowPremium(false);
-          storage.updateUserPreferences({ isPremium: true });
+          refreshPremium();
         }}
       />
     );
@@ -70,14 +73,21 @@ const AccountScreen: React.FC = () => {
     items: SettingItem[];
   }
 
+  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'User';
+
   const settingSections: SettingSection[] = [
     {
       title: 'Account',
       items: user
         ? [
             {
-              label: `Signed in as ${user.email}`,
-              emoji: '\u{2705}',
+              label: userName,
+              emoji: '\u{1F464}',
+              onPress: () => {},
+            },
+            {
+              label: `${user.email}`,
+              emoji: '\u{2709}\u{FE0F}',
               onPress: () => {},
             },
             {
@@ -102,14 +112,51 @@ const AccountScreen: React.FC = () => {
     },
     {
       title: 'Premium',
-      items: [
-        {
-          label: 'Upgrade to Premium',
-          emoji: '\u{2B50}',
-          onPress: () => setShowPremium(true),
-          accent: true,
-        },
-      ],
+      items: isPremium
+        ? [
+            {
+              label: 'Premium Active',
+              emoji: '\u{1F451}',
+              onPress: () => Alert.alert('Premium', 'You have full access to all premium features!'),
+              accent: true,
+            },
+            {
+              label: 'Restore Purchases',
+              emoji: '\u{1F504}',
+              onPress: async () => {
+                const restored = await revenueCatService.restorePurchases();
+                Alert.alert(
+                  restored ? 'Restored' : 'No Purchases Found',
+                  restored
+                    ? 'Your premium access has been restored.'
+                    : 'No previous purchases found.',
+                );
+                refreshPremium();
+              },
+            },
+          ]
+        : [
+            {
+              label: 'Upgrade to Premium',
+              emoji: '\u{2B50}',
+              onPress: () => setShowPremium(true),
+              accent: true,
+            },
+            {
+              label: 'Restore Purchases',
+              emoji: '\u{1F504}',
+              onPress: async () => {
+                const restored = await revenueCatService.restorePurchases();
+                Alert.alert(
+                  restored ? 'Restored' : 'No Purchases Found',
+                  restored
+                    ? 'Your premium access has been restored.'
+                    : 'No previous purchases found.',
+                );
+                refreshPremium();
+              },
+            },
+          ],
     },
     {
       title: 'Appearance',

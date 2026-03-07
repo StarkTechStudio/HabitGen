@@ -1,31 +1,27 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { adMob } from '../api/admob';
 
 interface AdBannerProps {
   isPremium?: boolean;
 }
 
-const AdBanner: React.FC<AdBannerProps> = ({ isPremium = false }) => {
+const AdBanner: React.FC<AdBannerProps> = ({ isPremium }) => {
   const { theme } = useTheme();
 
-  // Don't show ads for premium users
   if (isPremium) return null;
 
-  const adUnitId = adMob.getBannerAdUnitId();
-
-  // TODO: Replace with actual AdMob BannerAd component
-  // import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
-  // return <BannerAd unitId={adUnitId} size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} />;
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.border }]}>
-      <Text style={[styles.text, { color: theme.colors.textMuted }]}>
-        Ad Placeholder ({adUnitId.slice(-8)})
-      </Text>
-      <Text style={[styles.subtext, { color: theme.colors.textMuted }]}>
-        Upgrade to Premium to remove ads
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+        },
+      ]}>
+      <Text style={[styles.adLabel, { color: theme.colors.textMuted }]}>
+        Ad Placeholder
       </Text>
     </View>
   );
@@ -33,13 +29,18 @@ const AdBanner: React.FC<AdBannerProps> = ({ isPremium = false }) => {
 
 const styles = StyleSheet.create({
   container: {
-    height: 60,
+    height: 52,
     justifyContent: 'center',
     alignItems: 'center',
     borderTopWidth: 1,
+    // Positioned above the tab bar, the tab bar already has Android nav padding
+    // So the ad sits between content and tab bar
+    marginBottom: Platform.OS === 'android' ? 0 : 0,
   },
-  text: { fontSize: 11, fontWeight: '600' },
-  subtext: { fontSize: 10, marginTop: 2 },
+  adLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
 });
 
 export default AdBanner;
