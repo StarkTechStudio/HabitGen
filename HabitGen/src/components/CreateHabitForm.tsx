@@ -16,6 +16,7 @@ import EmojiPicker from './EmojiPicker';
 import DurationScrollWheel from './DurationScrollWheel';
 import PremiumScreen from './PremiumScreen';
 import { storage } from '../utils/storage';
+import { usePremium } from '../../App';
 
 interface CreateHabitFormProps {
   onClose: () => void;
@@ -25,6 +26,7 @@ interface CreateHabitFormProps {
 const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit }) => {
   const { theme } = useTheme();
   const { addHabit, updateHabit, habits } = useHabits();
+  const { isPremium, refreshPremium } = usePremium();
   const [name, setName] = useState(editHabit?.name || '');
   const [emoji, setEmoji] = useState(editHabit?.emoji || '\u{1F3AF}');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -97,7 +99,7 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
         onClose={() => setShowPaywall(false)}
         onPurchased={() => {
           setShowPaywall(false);
-          storage.updateUserPreferences({ isPremium: true });
+          refreshPremium();
         }}
       />
     );
@@ -221,75 +223,127 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
           />
         )}
 
-        {/* Difficulty (Premium) - DISABLED, opens paywall on tap */}
+        {/* Difficulty (Premium) */}
         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
           Difficulty{' '}
-          <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>
+          {!isPremium && <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>}
         </Text>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
-          <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+        {isPremium ? (
+          <View style={styles.optionsRow}>
             {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
-              <View
+              <TouchableOpacity
                 key={d}
+                onPress={() => setDifficulty(d)}
                 style={[
                   styles.optionChip,
                   {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
+                    backgroundColor: difficulty === d ? theme.colors.primary : theme.colors.surface,
+                    borderColor: difficulty === d ? theme.colors.primary : theme.colors.border,
                   },
                 ]}>
                 <Text
                   style={[
                     styles.optionText,
-                    { color: theme.colors.textMuted },
+                    { color: difficulty === d ? '#FFF' : theme.colors.text },
                   ]}>
                   {d === 'easy' ? '\u{1F7E2}' : d === 'medium' ? '\u{1F7E1}' : '\u{1F534}'}{' '}
                   {d.charAt(0).toUpperCase() + d.slice(1)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
-          <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
-            <Text style={[styles.lockText, { color: theme.colors.accent }]}>
-              {'\u{1F512}'} Upgrade to PRO to unlock
-            </Text>
-          </View>
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+            <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+              {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
+                <View
+                  key={d}
+                  style={[
+                    styles.optionChip,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      { color: theme.colors.textMuted },
+                    ]}>
+                    {d === 'easy' ? '\u{1F7E2}' : d === 'medium' ? '\u{1F7E1}' : '\u{1F534}'}{' '}
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
+              <Text style={[styles.lockText, { color: theme.colors.accent }]}>
+                {'\u{1F512}'} Upgrade to PRO to unlock
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
-        {/* Priority (Premium) - DISABLED, opens paywall on tap */}
+        {/* Priority (Premium) */}
         <Text style={[styles.label, { color: theme.colors.textSecondary, marginTop: 8 }]}>
           Priority{' '}
-          <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>
+          {!isPremium && <Text style={[styles.premiumTag, { color: theme.colors.accent }]}>PRO</Text>}
         </Text>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
-          <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+        {isPremium ? (
+          <View style={styles.optionsRow}>
             {(['low', 'medium', 'high'] as Priority[]).map(p => (
-              <View
+              <TouchableOpacity
                 key={p}
+                onPress={() => setPriority(p)}
                 style={[
                   styles.optionChip,
                   {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
+                    backgroundColor: priority === p ? theme.colors.primary : theme.colors.surface,
+                    borderColor: priority === p ? theme.colors.primary : theme.colors.border,
                   },
                 ]}>
                 <Text
                   style={[
                     styles.optionText,
-                    { color: theme.colors.textMuted },
+                    { color: priority === p ? '#FFF' : theme.colors.text },
                   ]}>
                   {p === 'low' ? '\u{2B07}\u{FE0F}' : p === 'medium' ? '\u{27A1}\u{FE0F}' : '\u{2B06}\u{FE0F}'}{' '}
                   {p.charAt(0).toUpperCase() + p.slice(1)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
-          <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
-            <Text style={[styles.lockText, { color: theme.colors.accent }]}>
-              {'\u{1F512}'} Upgrade to PRO to unlock
-            </Text>
-          </View>
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+            <View style={[styles.optionsRow, { opacity: 0.45 }]}>
+              {(['low', 'medium', 'high'] as Priority[]).map(p => (
+                <View
+                  key={p}
+                  style={[
+                    styles.optionChip,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      { color: theme.colors.textMuted },
+                    ]}>
+                    {p === 'low' ? '\u{2B07}\u{FE0F}' : p === 'medium' ? '\u{27A1}\u{FE0F}' : '\u{2B06}\u{FE0F}'}{' '}
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={[styles.lockOverlay, { backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent + '40' }]}>
+              <Text style={[styles.lockText, { color: theme.colors.accent }]}>
+                {'\u{1F512}'} Upgrade to PRO to unlock
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );

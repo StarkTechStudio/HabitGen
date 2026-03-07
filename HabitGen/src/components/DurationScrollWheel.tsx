@@ -1,10 +1,11 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  ViewToken,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
@@ -25,21 +26,54 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
 }) => {
   const { theme } = useTheme();
   const listRef = useRef<FlatList>(null);
-  const [currentValue, setCurrentValue] = useState(value);
+  const currentIndex = useRef(Math.max(0, durations.indexOf(value)));
 
-  const onViewable = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const middle = viewableItems[Math.floor(viewableItems.length / 2)];
-      if (middle?.item !== undefined) {
-        const val = middle.item as number;
-        setCurrentValue(val);
-        onChange(val);
-      }
+  useEffect(() => {
+    const idx = durations.indexOf(value);
+    if (idx >= 0) {
+      currentIndex.current = idx;
+    }
+  }, [value]);
+
+  // Use onMomentumScrollEnd for precise snap detection
+  const onMomentumScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = e.nativeEvent.contentOffset.y;
+      const idx = Math.round(offsetY / ITEM_HEIGHT);
+      const clampedIdx = Math.max(0, Math.min(idx, durations.length - 1));
+      currentIndex.current = clampedIdx;
+      onChange(durations[clampedIdx]);
     },
     [onChange],
   );
 
   const initialIndex = Math.max(0, durations.indexOf(value));
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: number; index: number }) => {
+      // We use the value prop to determine highlighted item
+      const isSelected = item === value;
+      return (
+        <View style={[styles.item, { height: ITEM_HEIGHT }]}>
+          <Text
+            style={[
+              styles.itemText,
+              {
+                color: isSelected
+                  ? theme.colors.primary
+                  : theme.colors.textMuted,
+                fontSize: isSelected ? 26 : 18,
+                fontWeight: isSelected ? '800' : '400',
+                opacity: isSelected ? 1 : 0.45,
+              },
+            ]}>
+            {item} min
+          </Text>
+        </View>
+      );
+    },
+    [theme, value],
+  );
 
   return (
     <View style={styles.wrapper}>
@@ -68,27 +102,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
           ref={listRef}
           data={durations}
           keyExtractor={item => `dur_${item}`}
-          renderItem={({ item }) => {
-            const isSelected = item === currentValue;
-            return (
-              <View style={[styles.item, { height: ITEM_HEIGHT }]}>
-                <Text
-                  style={[
-                    styles.itemText,
-                    {
-                      color: isSelected
-                        ? theme.colors.primary
-                        : theme.colors.textMuted,
-                      fontSize: isSelected ? 26 : 18,
-                      fontWeight: isSelected ? '800' : '400',
-                      opacity: isSelected ? 1 : 0.5,
-                    },
-                  ]}>
-                  {item} min
-                </Text>
-              </View>
-            );
-          }}
+          renderItem={renderItem}
           showsVerticalScrollIndicator={false}
           snapToInterval={ITEM_HEIGHT}
           decelerationRate="fast"
@@ -102,8 +116,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
             offset: ITEM_HEIGHT * index,
             index,
           })}
-          onViewableItemsChanged={onViewable}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          onMomentumScrollEnd={onMomentumScrollEnd}
         />
       </View>
     </View>
