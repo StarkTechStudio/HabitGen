@@ -1,42 +1,73 @@
-// Screen Lock / Focus Mode Service
-// Provides screen lock functionality during timer sessions.
-
-import { Platform, AppState, Alert, NativeEventSubscription } from 'react-native';
+import {
+  Platform,
+  AppState,
+  Alert,
+  NativeModules,
+  NativeEventSubscription,
+} from 'react-native';
 
 type FocusCallback = (isFocused: boolean) => void;
+
+// Default allowed apps
+const DEFAULT_ALLOWED_APPS = ['Phone', 'Messages', 'YouTube'];
 
 class ScreenLockService {
   private isLocked = false;
   private listeners: FocusCallback[] = [];
   private appStateSubscription: NativeEventSubscription | null = null;
+  private allowedApps: string[] = DEFAULT_ALLOWED_APPS;
 
   async requestPermission(): Promise<boolean> {
-    // Modern iOS-style permission dialog
-    const title = 'Enable Focus Mode';
-    const message = Platform.OS === 'android'
-      ? 'HabitGen will enter Focus Mode during your sessions.\n\n' +
-        'While active:\n' +
-        '\u2022 Your screen stays locked to HabitGen\n' +
-        '\u2022 Only Phone and SMS apps are accessible\n' +
-        '\u2022 Social media apps will be blocked\n\n' +
-        'You can stop anytime, but your streak will be penalized.'
-      : 'HabitGen will enter Focus Mode during your sessions.\n\n' +
-        'While active:\n' +
-        '\u2022 A fullscreen overlay blocks distractions\n' +
-        '\u2022 Only Phone and SMS apps are accessible\n' +
-        '\u2022 Social media apps will be blocked\n\n' +
-        'For full screen lock, enable Guided Access in Settings > Accessibility.';
-
     return new Promise(resolve => {
-      Alert.alert(title, message, [
-        { text: 'Enable Focus Mode', onPress: () => resolve(true) },
-      ]);
+      if (Platform.OS === 'android') {
+        Alert.alert(
+          'Enable Focus Mode',
+          'HabitGen will lock your screen during focus sessions.\n\n' +
+            'While active:\n' +
+            '\u{2022} Your screen stays locked to HabitGen\n' +
+            `\u{2022} Allowed apps: ${this.allowedApps.join(', ')}\n` +
+            '\u{2022} All other apps will be blocked\n\n' +
+            'You can stop anytime, but your streak will be penalized.',
+          [{ text: 'Enable Focus Mode', onPress: () => resolve(true) }],
+        );
+      } else {
+        Alert.alert(
+          'Enable Focus Mode',
+          'HabitGen will enter Focus Mode during sessions.\n\n' +
+            'For full screen lock on iOS:\n' +
+            '\u{2022} Go to Settings > Accessibility > Guided Access\n' +
+            '\u{2022} Enable Guided Access\n' +
+            '\u{2022} Triple-click side button to start\n\n' +
+            `Allowed apps: ${this.allowedApps.join(', ')}`,
+          [{ text: 'Got it', onPress: () => resolve(true) }],
+        );
+      }
     });
+  }
+
+  setAllowedApps(apps: string[]): void {
+    this.allowedApps = apps;
+  }
+
+  getAllowedApps(): string[] {
+    return this.allowedApps;
   }
 
   async startLock(): Promise<void> {
     this.isLocked = true;
 
+    if (Platform.OS === 'android') {
+      // Try to use native screen pinning
+      try {
+        if (NativeModules.ScreenLockModule) {
+          NativeModules.ScreenLockModule.startLockTask();
+        }
+      } catch (e) {
+        console.warn('[ScreenLock] Native lock not available:', e);
+      }
+    }
+
+    // Monitor app state changes
     this.appStateSubscription = AppState.addEventListener(
       'change',
       nextAppState => {
@@ -53,6 +84,17 @@ class ScreenLockService {
 
   async stopLock(): Promise<void> {
     this.isLocked = false;
+
+    if (Platform.OS === 'android') {
+      try {
+        if (NativeModules.ScreenLockModule) {
+          NativeModules.ScreenLockModule.stopLockTask();
+        }
+      } catch (e) {
+        console.warn('[ScreenLock] Native unlock not available:', e);
+      }
+    }
+
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
     this.notifyListeners(false);

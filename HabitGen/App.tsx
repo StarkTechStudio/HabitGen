@@ -40,9 +40,11 @@ const AppContent: React.FC = () => {
       setIsPremium(revenueCatService.isPremium());
     });
 
-    // Listen for premium status changes
-    const unsub = revenueCatService.onCustomerInfoUpdate(() => {
-      setIsPremium(revenueCatService.isPremium());
+    // Listen for premium status changes - fires on purchase, restore, renewal, expiry
+    const unsub = revenueCatService.onCustomerInfoUpdate((info) => {
+      const premium = revenueCatService.isPremium();
+      setIsPremium(premium);
+      storage.updateUserPreferences({ isPremium: premium });
     });
 
     return unsub;
@@ -84,8 +86,10 @@ const AppContent: React.FC = () => {
         )}
         {appState === 'main' && (
           <HabitProvider>
-            <AppNavigator />
-            <AdBanner isPremium={isPremium} />
+            <View style={{ flex: 1 }}>
+              <AppNavigator />
+            </View>
+            {!isPremium && <AdBanner isPremium={isPremium} />}
           </HabitProvider>
         )}
       </View>

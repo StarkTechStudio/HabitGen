@@ -33,9 +33,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderTopWidth: 1,
-    // Positioned above the tab bar, the tab bar already has Android nav padding
-    // So the ad sits between content and tab bar
-    marginBottom: Platform.OS === 'android' ? 0 : 0,
   },
   adLabel: {
     fontSize: 12,
