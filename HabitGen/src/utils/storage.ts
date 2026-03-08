@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserPreferences, Habit, HabitSession, Streak, TimerState } from '../types';
+import { UserPreferences, Habit, HabitSession, Streak, TimerState, SleepSchedule } from '../types';
 
 const KEYS = {
   USER_PREFS: '@habitgen_user_prefs',
@@ -104,6 +104,15 @@ async function clearAll(): Promise<void> {
   await Promise.all(keys.map(key => AsyncStorage.removeItem(key)));
 }
 
+async function getSleepSchedule(): Promise<SleepSchedule | null> {
+  const prefs = await getUserPreferences();
+  return prefs.sleepSchedule || null;
+}
+
+async function setSleepSchedule(schedule: SleepSchedule | null): Promise<void> {
+  await updateUserPreferences({ sleepSchedule: schedule ?? undefined });
+}
+
 export const storage = {
   getUserPreferences,
   setUserPreferences,
@@ -119,5 +128,7 @@ export const storage = {
   updateStreak,
   getTimerState,
   saveTimerState,
+  getSleepSchedule,
+  setSleepSchedule,
   clearAll,
 };

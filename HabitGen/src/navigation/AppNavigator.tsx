@@ -8,7 +8,7 @@ import TimerScreen from '../components/TimerScreen';
 import AuthScreen from '../components/AuthScreen';
 import PremiumScreen from '../components/PremiumScreen';
 import { useHabits } from '../context/HabitContext';
-import { storage } from '../utils/storage';
+import { usePremium } from '../../App';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -70,11 +70,12 @@ const AuthWrapper: React.FC<{ navigation: any }> = ({ navigation }) => {
 };
 
 const PremiumWrapper: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const { refreshPremium } = usePremium();
   return (
     <PremiumScreen
       onClose={() => navigation.goBack()}
-      onPurchased={() => {
-        storage.updateUserPreferences({ isPremium: true });
+      onPurchased={async () => {
+        await refreshPremium();
         navigation.goBack();
       }}
     />

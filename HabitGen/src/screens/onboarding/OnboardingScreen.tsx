@@ -20,6 +20,7 @@ const TOTAL_STEPS = 4;
 const FOCUS_APPS = [
   { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', locked: true },
   { id: 'messages', label: 'Messages', emoji: '\u{1F4AC}', locked: true },
+  { id: 'gmail', label: 'Gmail', emoji: '\u{2709}\u{FE0F}', locked: false },
   { id: 'youtube', label: 'YouTube', emoji: '\u{1F4FA}', locked: false },
   { id: 'maps', label: 'Maps', emoji: '\u{1F5FA}\u{FE0F}', locked: false },
   { id: 'music', label: 'Music', emoji: '\u{1F3B5}', locked: false },
@@ -38,7 +39,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
   const [bedTime, setBedTime] = useState('23:00');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  const [allowedApps, setAllowedApps] = useState<string[]>(['phone', 'messages', 'youtube']);
+  const [allowedApps, setAllowedApps] = useState<string[]>(['phone', 'messages', 'gmail']);
 
   const toggleGoal = (id: string) => {
     setSelectedGoals(prev =>
@@ -68,6 +69,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       onboardingComplete: true,
       isPremium: false,
       allowedApps,
+      allowLockScreenTimer: true,
     });
     onComplete();
   };
@@ -156,7 +158,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
               Focus Mode Apps
             </Text>
             <Text style={[styles.stepDesc, { color: theme.colors.textSecondary }]}>
-              Choose up to 3 apps accessible during focus sessions.
+              Choose up to 3 apps accessible during focus sessions (Phone + Messages + one more).
               Phone and Messages are always allowed.
             </Text>
             <View style={styles.appsGrid}>

@@ -3,6 +3,13 @@ export type ThemeMode = 'light' | 'dark';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type Priority = 'low' | 'medium' | 'high';
 
+export interface SleepSchedule {
+  enabled: boolean;
+  startTime: string; // "22:00"
+  endTime: string;   // "07:00"
+  days: number[];    // 0 = Sunday, 1 = Monday, ...
+}
+
 export interface UserPreferences {
   wakeUpTime: string;
   bedTime: string;
@@ -11,6 +18,9 @@ export interface UserPreferences {
   onboardingComplete: boolean;
   isPremium: boolean;
   allowedApps?: string[];
+  sleepSchedule?: SleepSchedule;
+  /** When true, show focus timer on lock screen (Android, like power saver mode). */
+  allowLockScreenTimer?: boolean;
 }
 
 export interface Habit {

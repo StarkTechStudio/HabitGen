@@ -25,6 +25,14 @@ const TodayScreen: React.FC = () => {
   const todayStr = getTodayDateString();
   const todaySessions = sessions.filter(s => s.date === todayStr);
   const completedToday = todaySessions.filter(s => s.completed).length;
+
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const sortedHabits = [...habits].sort((a, b) => {
+    const aP = a.priority ? priorityOrder[a.priority] : 1;
+    const bP = b.priority ? priorityOrder[b.priority] : 1;
+    return aP - bP;
+  });
+
   const totalStreaks = habits.reduce(
     (sum, h) => sum + getHabitStreak(h.id).currentStreak,
     0,
@@ -126,7 +134,7 @@ const TodayScreen: React.FC = () => {
             tintColor={theme.colors.primary}
           />
         }>
-        {habits.length === 0 ? (
+        {sortedHabits.length === 0 ? (
           <View
             style={[
               styles.emptyState,
@@ -150,7 +158,7 @@ const TodayScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         ) : (
-          habits.map(habit => (
+          sortedHabits.map(habit => (
             <HabitCard
               key={habit.id}
               habit={habit}

@@ -38,6 +38,21 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
     }
   }, [value]);
 
+  // Scroll to current value when mounted or value changes (fixes stuck wheel on Android)
+  const scrollToValue = useCallback(() => {
+    const idx = Math.max(0, durations.indexOf(value));
+    listRef.current?.scrollToOffset({
+      offset: idx * ITEM_HEIGHT,
+      animated: false,
+    });
+    setCenteredIndex(idx);
+  }, [value]);
+
+  useEffect(() => {
+    const t = setTimeout(scrollToValue, 50);
+    return () => clearTimeout(t);
+  }, [scrollToValue]);
+
   // Update highlighted item instantly during scroll
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -125,6 +140,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
           contentContainerStyle={{
             paddingVertical: ITEM_HEIGHT * 2,
           }}
+          nestedScrollEnabled
           initialScrollIndex={initialIndex}
           getItemLayout={(_, index) => ({
             length: ITEM_HEIGHT,
@@ -134,6 +150,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
           onScroll={onScroll}
           scrollEventThrottle={16}
           onMomentumScrollEnd={onMomentumScrollEnd}
+          onLayout={scrollToValue}
         />
       </View>
     </View>

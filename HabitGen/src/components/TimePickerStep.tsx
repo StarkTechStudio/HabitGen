@@ -1,10 +1,9 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  Dimensions,
   ViewToken,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+const CENTER_OFFSET = (PICKER_HEIGHT - ITEM_HEIGHT) / 2;
 
 interface TimePickerStepProps {
   value: string;
@@ -26,9 +26,13 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
   const [selectedHour, selectedMinute] = value.split(':');
   const hourRef = useRef<FlatList>(null);
   const minuteRef = useRef<FlatList>(null);
+  const hasUserScrolledHour = useRef(false);
+  const hasUserScrolledMinute = useRef(false);
+  const isInitialMount = useRef(true);
 
   const onHourViewable = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!hasUserScrolledHour.current) return;
       const middle = viewableItems[Math.floor(viewableItems.length / 2)];
       if (middle?.item) {
         onChange(`${middle.item}:${selectedMinute}`);
@@ -39,6 +43,7 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
 
   const onMinuteViewable = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!hasUserScrolledMinute.current) return;
       const middle = viewableItems[Math.floor(viewableItems.length / 2)];
       if (middle?.item) {
         onChange(`${selectedHour}:${middle.item}`);
@@ -46,6 +51,19 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
     },
     [onChange, selectedHour],
   );
+
+  // One-time initial scroll to value on mount only (no dependency on value to avoid fighting with user)
+  useEffect(() => {
+    if (!isInitialMount.current) return;
+    isInitialMount.current = false;
+    const t = setTimeout(() => {
+      const hIdx = Math.max(0, Math.min(hours.indexOf(selectedHour), hours.length - 1));
+      const mIdx = Math.max(0, Math.min(minutes.indexOf(selectedMinute), minutes.length - 1));
+      hourRef.current?.scrollToOffset({ offset: hIdx * ITEM_HEIGHT, animated: false });
+      minuteRef.current?.scrollToOffset({ offset: mIdx * ITEM_HEIGHT, animated: false });
+    }, 100);
+    return () => clearTimeout(t);
+  }, []);
 
   const renderItem = useCallback(
     ({ item, isSelected }: { item: string; isSelected: boolean }) => (
@@ -70,7 +88,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
     <View style={styles.container}>
       <View style={[styles.pickerContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         <View style={[styles.selectedOverlay, {
-          top: ITEM_HEIGHT * 2,
+          top: CENTER_OFFSET,
+          height: ITEM_HEIGHT,
           backgroundColor: theme.colors.primaryLight,
           borderColor: theme.colors.primary + '30',
         }]} />
@@ -87,9 +106,9 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
           decelerationRate="fast"
           style={styles.picker}
           contentContainerStyle={{
-            paddingVertical: ITEM_HEIGHT * 2,
+            paddingVertical: CENTER_OFFSET,
           }}
-          initialScrollIndex={hours.indexOf(selectedHour)}
+          initialScrollIndex={Math.min(hours.indexOf(selectedHour), Math.max(0, hours.length - 1))}
           getItemLayout={(_, index) => ({
             length: ITEM_HEIGHT,
             offset: ITEM_HEIGHT * index,
@@ -97,6 +116,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
           })}
           onViewableItemsChanged={onHourViewable}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          onMomentumScrollEnd={() => { hasUserScrolledHour.current = true; }}
+          onScrollEndDrag={() => { hasUserScrolledHour.current = true; }}
         />
 
         <Text style={[styles.separator, { color: theme.colors.primary }]}>:</Text>
@@ -114,7 +135,7 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
           decelerationRate="fast"
           style={styles.picker}
           contentContainerStyle={{
-            paddingVertical: ITEM_HEIGHT * 2,
+            paddingVertical: CENTER_OFFSET,
           }}
           initialScrollIndex={Math.max(0, minutes.indexOf(selectedMinute))}
           getItemLayout={(_, index) => ({
@@ -124,6 +145,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
           })}
           onViewableItemsChanged={onMinuteViewable}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          onMomentumScrollEnd={() => { hasUserScrolledMinute.current = true; }}
+          onScrollEndDrag={() => { hasUserScrolledMinute.current = true; }}
         />
       </View>
     </View>
@@ -152,9 +175,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     right: 10,
-    height: ITEM_HEIGHT,
     borderRadius: 12,
     borderWidth: 1,
+    zIndex: 1,
   },
   item: {
     justifyContent: 'center',

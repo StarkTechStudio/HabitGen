@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { StatusBar, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar, View, Platform, AppState } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { HabitProvider } from './src/context/HabitContext';
@@ -8,7 +8,9 @@ import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import AdBanner from './src/components/AdBanner';
+import SleepLockOverlay from './src/components/SleepLockOverlay';
 import { storage } from './src/utils/storage';
+import { isInSleepWindow } from './src/utils/helpers';
 import { adMob } from './src/api/admob';
 import { revenueCatService } from './src/api/revenuecat';
 import { screenLock } from './src/api/screenlock';
@@ -27,6 +29,47 @@ const PremiumContext = createContext<PremiumContextType>({
 });
 
 export const usePremium = () => useContext(PremiumContext);
+
+const MainWithAds: React.FC<{ isPremium: boolean }> = ({ isPremium }) => {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === 'android' ? Math.max(insets.bottom, 12) : insets.bottom;
+  const [sleepLockActive, setSleepLockActive] = useState(false);
+
+  const checkSleepWindow = useCallback(async () => {
+    const schedule = await storage.getSleepSchedule();
+    if (schedule?.enabled && isInSleepWindow(schedule)) {
+      setSleepLockActive(true);
+    } else {
+      setSleepLockActive(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkSleepWindow();
+    const interval = setInterval(checkSleepWindow, 60 * 1000);
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') checkSleepWindow();
+    });
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [checkSleepWindow]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <AppNavigator />
+      {!isPremium && (
+        <View style={{ paddingBottom: bottomInset, backgroundColor: 'transparent' }}>
+          <AdBanner isPremium={isPremium} />
+        </View>
+      )}
+      {sleepLockActive && (
+        <SleepLockOverlay onCancel={() => setSleepLockActive(false)} />
+      )}
+    </View>
+  );
+};
 
 const AppContent: React.FC = () => {
   const { theme } = useTheme();
@@ -86,10 +129,7 @@ const AppContent: React.FC = () => {
         )}
         {appState === 'main' && (
           <HabitProvider>
-            <View style={{ flex: 1 }}>
-              <AppNavigator />
-            </View>
-            {!isPremium && <AdBanner isPremium={isPremium} />}
+            <MainWithAds isPremium={isPremium} />
           </HabitProvider>
         )}
       </View>

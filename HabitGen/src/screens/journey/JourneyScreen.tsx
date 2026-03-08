@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import PremiumScreen from '../../components/PremiumScreen';
+import TimePickerStep from '../../components/TimePickerStep';
 import { usePremium } from '../../../App';
+import { storage } from '../../utils/storage';
+import type { SleepSchedule } from '../../types';
 
 interface Journey {
   id: string;
@@ -164,11 +168,50 @@ const journeys: Journey[] = [
   },
 ];
 
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 const JourneyScreen: React.FC = () => {
   const { theme } = useTheme();
   const { isPremium, refreshPremium } = usePremium();
   const [showPaywall, setShowPaywall] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
+  const [showSleepScheduleForm, setShowSleepScheduleForm] = useState(false);
+  const [sleepStartTime, setSleepStartTime] = useState('22:00');
+  const [sleepEndTime, setSleepEndTime] = useState('07:00');
+  const [sleepDays, setSleepDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+
+  useEffect(() => {
+    if (showSleepScheduleForm) {
+      storage.getSleepSchedule().then(s => {
+        if (s) {
+          setSleepStartTime(s.startTime);
+          setSleepEndTime(s.endTime);
+          setSleepDays(s.days.length ? s.days : [0, 1, 2, 3, 4, 5, 6]);
+        }
+      });
+    }
+  }, [showSleepScheduleForm]);
+
+  const toggleSleepDay = (day: number) => {
+    setSleepDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort((a, b) => a - b),
+    );
+  };
+
+  const handleSaveSleepSchedule = async () => {
+    const schedule: SleepSchedule = {
+      enabled: true,
+      startTime: sleepStartTime,
+      endTime: sleepEndTime,
+      days: sleepDays,
+    };
+    await storage.setSleepSchedule(schedule);
+    setShowSleepScheduleForm(false);
+    Alert.alert(
+      'Sleep Schedule Set',
+      `Your phone will be locked for sleeping from ${sleepStartTime} to ${sleepEndTime} on ${sleepDays.map(d => DAY_LABELS[d]).join(', ')}.\n\nYou can cancel the lock anytime when it activates.`,
+    );
+  };
 
   if (showPaywall) {
     return (
@@ -188,32 +231,61 @@ const JourneyScreen: React.FC = () => {
     );
   }
 
+  if (showSleepScheduleForm) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.sleepFormHeader, { borderBottomColor: theme.colors.border }]}>
+          <TouchableOpacity onPress={() => setShowSleepScheduleForm(false)}>
+            <Text style={[styles.cancelText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={[styles.sleepFormTitle, { color: theme.colors.text }]}>Better Sleep Routine</Text>
+          <TouchableOpacity onPress={handleSaveSleepSchedule}>
+            <Text style={[styles.saveText, { color: theme.colors.primary }]}>Save</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.sleepFormContent} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.sleepFormDesc, { color: theme.colors.textSecondary }]}>
+            Your phone will be locked during this time. Only Phone, Messages & Gmail will be available. Tap Cancel when the lock is active to unlock.
+          </Text>
+          <Text style={[styles.sleepLabel, { color: theme.colors.textSecondary }]}>Start time (bedtime)</Text>
+          <TimePickerStep value={sleepStartTime} onChange={setSleepStartTime} />
+          <Text style={[styles.sleepLabel, { color: theme.colors.textSecondary }]}>End time (wake)</Text>
+          <TimePickerStep value={sleepEndTime} onChange={setSleepEndTime} />
+          <Text style={[styles.sleepLabel, { color: theme.colors.textSecondary }]}>Days of the week</Text>
+          <View style={styles.daysRow}>
+            {DAY_LABELS.map((label, i) => {
+              const selected = sleepDays.includes(i);
+              return (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => toggleSleepDay(i)}
+                  style={[
+                    styles.dayChip,
+                    {
+                      backgroundColor: selected ? theme.colors.primary : theme.colors.surface,
+                      borderColor: selected ? theme.colors.primary : theme.colors.border,
+                    },
+                  ]}>
+                  <Text style={[styles.dayChipText, { color: selected ? '#FFF' : theme.colors.text }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity
+            style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
+            onPress={handleSaveSleepSchedule}>
+            <Text style={styles.saveButtonText}>Save sleep schedule</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
+
   const handleJourneyPress = (journey: Journey) => {
     setSelectedJourney(journey);
     if (isPremium) {
-      // For sleep journey, show schedule picker
       if (journey.id === 'sleep') {
-        Alert.alert(
-          `${journey.emoji} ${journey.title}`,
-          'Set your sleep schedule:\n\n' +
-            '\u{2022} Your phone will be locked during sleep time\n' +
-            '\u{2022} Only Phone and Messages will be accessible\n' +
-            '\u{2022} Press Cancel anytime to unlock\n\n' +
-            'Configure your schedule in Account > Sleep Schedule.',
-          [
-            { text: 'Close', style: 'cancel' },
-            {
-              text: 'Enable Sleep Lock',
-              onPress: () => {
-                Alert.alert(
-                  'Sleep Schedule Set',
-                  'Your phone will enter sleep mode during your scheduled time.\n\n' +
-                    'You can cancel the lock at any time from the notification.',
-                );
-              },
-            },
-          ],
-        );
+        setShowSleepScheduleForm(true);
       } else {
         Alert.alert(
           `${journey.emoji} ${journey.title}`,
@@ -365,6 +437,50 @@ const styles = StyleSheet.create({
     right: 12,
   },
   bottomSpacer: { height: 100 },
+  sleepFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 44,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  cancelText: { fontSize: 16, fontWeight: '500' },
+  sleepFormTitle: { fontSize: 18, fontWeight: '700' },
+  saveText: { fontSize: 16, fontWeight: '700' },
+  sleepFormContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
+  sleepFormDesc: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  sleepLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  dayChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  dayChipText: { fontSize: 13, fontWeight: '600' },
+  saveButton: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
 
 export default JourneyScreen;

@@ -1,13 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
-
 interface SplashScreenProps {
   onFinish: () => void;
 }
 
 const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
-  const { theme } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
 
@@ -30,15 +27,15 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
   }, [fadeAnim, scaleAnim, onFinish]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={styles.container}>
       <Animated.View
         style={[
           styles.logoContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
         ]}>
         <Text style={styles.fireEmoji}>{'\u{1F525}'}</Text>
-        <Text style={[styles.appName, { color: theme.colors.text }]}>HabitGen</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.appName, { color: '#FFF' }]}>HabitGen</Text>
+        <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.8)' }]}>
           Build better habits, one day at a time
         </Text>
       </Animated.View>
@@ -49,24 +46,27 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#000',
   },
   logoContainer: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   fireEmoji: {
-    fontSize: 80,
-    marginBottom: 12,
+    fontSize: 120,
+    marginBottom: 16,
   },
   appName: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: '800',
     letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    marginTop: 8,
+    marginTop: 10,
     fontWeight: '400',
   },
 });

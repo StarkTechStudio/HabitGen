@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/storage';
@@ -24,6 +26,8 @@ const AccountScreen: React.FC = () => {
   const { isPremium, refreshPremium } = usePremium();
   const [showAuth, setShowAuth] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
+  const insets = useSafeAreaInsets();
+  const bottomSafe = Platform.OS === 'android' ? Math.max(insets.bottom, 24) : insets.bottom;
 
   if (showAuth) {
     return <AuthScreen onClose={() => setShowAuth(false)} />;
@@ -212,7 +216,7 @@ const AccountScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + bottomSafe }]}
         showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, { color: theme.colors.text }]}>Account</Text>
 
@@ -320,7 +324,7 @@ const styles = StyleSheet.create({
   settingEmoji: { fontSize: 18, marginRight: 12 },
   settingLabel: { fontSize: 14, fontWeight: '500', flex: 1 },
   rightText: { fontSize: 12, fontWeight: '600' },
-  bottomSpacer: { height: 100 },
+  bottomSpacer: { height: 24 },
 });
 
 export default AccountScreen;

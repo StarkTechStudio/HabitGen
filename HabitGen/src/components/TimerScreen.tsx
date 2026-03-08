@@ -5,7 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  BackHandler,
   Platform,
+  AppState,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
@@ -52,36 +54,83 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     return Math.floor(durationMin / 30);
   }, []);
 
-  const handleStart = () => {
+  const beginFocusSession = useCallback(() => {
     const breakCount = getBreakCount(selectedDuration);
+    totalDurationRef.current = selectedDuration;
+    setBreakSlots(Array(breakCount).fill(false));
+    setTimeLeft(selectedDuration * 60);
+    setIsRunning(true);
+    setShowFocusOverlay(true);
+    startTimer(habitId, selectedDuration);
+  }, [selectedDuration, getBreakCount, habitId, startTimer]);
+
+  const pendingStartRef = useRef(false);
+
+  // Listen for app coming back to foreground (after Device Admin settings)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (nextState === 'active' && pendingStartRef.current) {
+        pendingStartRef.current = false;
+        const enabled = await screenLock.isDeviceAdminEnabled();
+        if (enabled) {
+          beginFocusSession();
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [beginFocusSession]);
+
+  const handleStart = async () => {
+    const breakCount = getBreakCount(selectedDuration);
+
+    if (Platform.OS === 'android') {
+      const adminEnabled = await screenLock.isDeviceAdminEnabled();
+      if (!adminEnabled) {
+        Alert.alert(
+          'Permission Required',
+          'HabitGen needs Device Admin permission to lock your phone during focus sessions.\n\n' +
+            'This keeps you focused by preventing you from leaving the app. ' +
+            'The permission is automatically removed when the timer stops, so you can always uninstall the app.',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {
+              text: 'Grant Permission',
+              onPress: () => {
+                pendingStartRef.current = true;
+                screenLock.requestDeviceAdmin();
+              },
+            },
+          ],
+        );
+        return;
+      }
+    }
+
     Alert.alert(
       'Start Focus Session',
       `${habit?.emoji} ${habit?.name} \u{2022} ${selectedDuration} min\n\n` +
-        'Once you start, your screen will be locked:\n\n' +
-        '\u{2705} Phone and SMS are allowed\n' +
-        '\u{2705} One additional app of your choice\n' +
-        '\u{274C} Social media apps are blocked\n\n' +
+        'Once you start:\n' +
+        '\u{2022} Your phone will be locked\n' +
+        '\u{2022} Only the timer will be visible\n' +
+        '\u{2022} No buttons will work except Stop\n\n' +
         `You'll get ${breakCount} break(s) of 5 min each.\n` +
-        'Breaks expire when the next 30-min slot begins.\n\n' +
         'Stopping early will decrease your streak by 1.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
           text: 'Start Focus',
-          onPress: () => {
-            screenLock.requestPermission().then(() => {
-              totalDurationRef.current = selectedDuration;
-              setBreakSlots(Array(breakCount).fill(false));
-              setTimeLeft(selectedDuration * 60);
-              setIsRunning(true);
-              setShowFocusOverlay(true);
-              startTimer(habitId, selectedDuration);
-            });
-          },
+          onPress: () => beginFocusSession(),
         },
       ],
     );
   };
+
+  // Block back button while timer is running
+  useEffect(() => {
+    if (!isRunning) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [isRunning]);
 
   // Main timer countdown
   useEffect(() => {

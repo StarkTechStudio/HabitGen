@@ -31,6 +31,7 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
   onRequestStop,
 }) => {
   const { theme } = useTheme();
+  const allowedApps = screenLock.getAllowedApps();
   const opacity = useRef(new Animated.Value(0)).current;
   const ringRotate = useRef(new Animated.Value(0)).current;
   const pulseScale = useRef(new Animated.Value(1)).current;
@@ -122,8 +123,8 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
               },
             ]}>
             <Text style={styles.islandEmoji}>{habitEmoji}</Text>
-            <Text style={styles.islandTimer}>{timeRemaining}</Text>
-            <Text style={[styles.islandLabel, { color: theme.colors.primary }]}>
+            <Text style={styles.islandTimer} selectable={false}>{timeRemaining}</Text>
+            <Text style={[styles.islandLabel, { color: theme.colors.primary }]} selectable={false}>
               {habitName}
             </Text>
           </Animated.View>
@@ -134,12 +135,13 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
           <View style={[styles.infoCard, { backgroundColor: '#1C1C1E' }]}>
             <Text style={styles.infoTitle}>Allowed during focus</Text>
             <View style={styles.allowedRow}>
-              <View style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
-                <Text style={styles.allowedText}>{'\u{1F4DE}'} Phone</Text>
-              </View>
-              <View style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
-                <Text style={styles.allowedText}>{'\u{1F4AC}'} SMS</Text>
-              </View>
+              {allowedApps.slice(0, 3).map((app, i) => (
+                <View key={app} style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
+                  <Text style={styles.allowedText}>
+                    {app === 'Phone' ? '\u{1F4DE}' : app === 'Messages' ? '\u{1F4AC}' : app === 'Gmail' ? '\u{2709}\u{FE0F}' : ''} {app}
+                  </Text>
+                </View>
+              ))}
             </View>
             <View style={[styles.blockedRow, { backgroundColor: '#3A1A1A', borderRadius: 10, padding: 8, marginTop: 6 }]}>
               <Text style={styles.blockedText}>

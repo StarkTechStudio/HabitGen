@@ -23,6 +23,15 @@ allprojects {
     repositories {
         maven { url("$rootDir/../node_modules/@react-native-async-storage/async-storage/android/local_repo") }
     }
+    afterEvaluate { project ->
+        if (project.name == 'react-native-reanimated') {
+            project.tasks.findByName('assertMinimalReactNativeVersionTask')?.enabled = false
+            project.tasks.findByName('assertWorkletsVersionTask')?.enabled = false
+        }
+        if (project.name == 'react-native-worklets') {
+            project.tasks.findByName('assertMinimalReactNativeVersionTask')?.enabled = false
+        }
+    }
 }
 
 apply plugin: "com.facebook.react.rootproject"

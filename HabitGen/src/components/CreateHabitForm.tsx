@@ -109,7 +109,8 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose}>
@@ -404,12 +405,13 @@ const styles = StyleSheet.create({
   },
   optionChip: {
     flex: 1,
+    minWidth: 90,
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1.5,
     alignItems: 'center',
   },
-  optionText: { fontSize: 13, fontWeight: '600' },
+  optionText: { fontSize: 14, fontWeight: '600' },
   lockOverlay: {
     borderRadius: 12,
     borderWidth: 1,

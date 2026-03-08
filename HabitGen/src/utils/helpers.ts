@@ -1,4 +1,5 @@
 import { Dimensions, PixelRatio } from 'react-native';
+import type { SleepSchedule } from '../types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BASE_WIDTH = 375; // iPhone 11 reference width
@@ -46,4 +47,19 @@ export function getDaysBetween(date1: string, date2: string): number {
   const d1 = new Date(date1).getTime();
   const d2 = new Date(date2).getTime();
   return Math.floor(Math.abs(d2 - d1) / 86400000);
+}
+
+export function isInSleepWindow(schedule: SleepSchedule): boolean {
+  const now = new Date();
+  const day = now.getDay();
+  if (!schedule.days.includes(day)) return false;
+  const [sh, sm] = schedule.startTime.split(':').map(Number);
+  const [eh, em] = schedule.endTime.split(':').map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins = eh * 60 + em;
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  if (startMins > endMins) {
+    return currentMins >= startMins || currentMins < endMins;
+  }
+  return currentMins >= startMins && currentMins < endMins;
 }
