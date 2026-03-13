@@ -62,11 +62,19 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
   };
 
   const handleGoogleSignIn = async () => {
+    // Deep-link back into the native app after Google OAuth completes
+    const redirectTo = Platform.select({
+      ios: 'habitgen://auth/callback',
+      android: 'habitgen://auth/callback',
+      default: undefined,
+    });
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
+          redirectTo,
           queryParams: {
             client_id: '506503251834-mvkrt8qs19g7eufms57mratf1r3rn1cp.apps.googleusercontent.com',
           },

@@ -155,7 +155,20 @@ const AccountScreen: React.FC = () => {
             {
               label: 'Upgrade to Premium',
               emoji: '\u{2B50}',
-              onPress: () => setShowPremium(true),
+              onPress: () => {
+                if (!user) {
+                  Alert.alert(
+                    'Sign in required',
+                    'Please sign in or create an account before upgrading to Premium.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Sign In', onPress: () => setShowAuth(true) },
+                    ],
+                  );
+                  return;
+                }
+                setShowPremium(true);
+              },
               accent: true,
             },
             {

@@ -21,6 +21,12 @@ interface FocusOverlayProps {
   habitEmoji: string;
   timeRemaining: string;
   onRequestStop: () => void;
+  /** Show break section (always shown when session has breaks) */
+  showBreakSection: boolean;
+  /** Button enabled only when a break is available in the current 30-min segment */
+  breakButtonEnabled: boolean;
+  remainingBreaks: number;
+  onTakeBreak: () => void;
 }
 
 const FocusOverlay: React.FC<FocusOverlayProps> = ({
@@ -29,6 +35,10 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
   habitEmoji,
   timeRemaining,
   onRequestStop,
+  showBreakSection,
+  breakButtonEnabled,
+  remainingBreaks,
+  onTakeBreak,
 }) => {
   const { theme } = useTheme();
   const allowedApps = screenLock.getAllowedApps();
@@ -129,6 +139,28 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
             </Text>
           </Animated.View>
         </View>
+
+        {/* Break section: always fixed when session has breaks; button disabled until next 30 min after use */}
+        {showBreakSection && (
+          <View style={styles.breakSection}>
+            <Text style={styles.breakRemainingText}>
+              You have {remainingBreaks} break{remainingBreaks === 1 ? '' : 's'} left
+            </Text>
+            <TouchableOpacity
+              style={[styles.breakButton, !breakButtonEnabled && styles.breakButtonDisabled]}
+              onPress={breakButtonEnabled ? onTakeBreak : undefined}
+              activeOpacity={breakButtonEnabled ? 0.8 : 1}
+              disabled={!breakButtonEnabled}>
+              <Text style={[styles.breakButtonText, !breakButtonEnabled && styles.breakButtonTextDisabled]}>
+                {'\u2615'} Take 5 min Break
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.breakHelperText}>
+              Break available every 30 minutes.{'\n'}
+              Unused breaks will expire automatically.
+            </Text>
+          </View>
+        )}
 
         {/* Allowed apps section */}
         <View style={styles.infoSection}>
@@ -241,6 +273,47 @@ const styles = StyleSheet.create({
   islandLabel: {
     fontSize: 16,
     fontWeight: '600',
+    marginTop: 8,
+  },
+  breakSection: {
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  breakRemainingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  breakButton: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#34C759',
+    backgroundColor: '#34C75920',
+    alignItems: 'center',
+  },
+  breakButtonDisabled: {
+    borderColor: '#48484A',
+    backgroundColor: '#2C2C2E',
+    opacity: 0.7,
+  },
+  breakButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#34C759',
+  },
+  breakButtonTextDisabled: {
+    color: '#8E8E93',
+  },
+  breakHelperText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    textAlign: 'center',
     marginTop: 8,
   },
   infoSection: {

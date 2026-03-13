@@ -176,17 +176,6 @@ class ScreenLockModule(reactContext: ReactApplicationContext) :
                 Log.e(TAG, "Error clearing flags", e)
             }
         }
-
-        // Deactivate device admin so app can be uninstalled
-        try {
-            val dpm = getDPM()
-            if (dpm.isAdminActive(getAdminComponent())) {
-                dpm.removeActiveAdmin(getAdminComponent())
-                Log.d(TAG, "Device admin deactivated")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deactivating admin", e)
-        }
     }
 
     /**

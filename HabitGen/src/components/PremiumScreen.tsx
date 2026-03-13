@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   Modal,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import RevenueCatUI from 'react-native-purchases-ui';
 import { useTheme } from '../context/ThemeContext';
@@ -21,6 +22,15 @@ interface PremiumScreenProps {
 
 const PremiumScreen: React.FC<PremiumScreenProps> = ({ onClose, onPurchased }) => {
   const { theme } = useTheme();
+  // On iOS, delay mounting the Paywall to avoid freeze/crash when shown inside Modal (known RN + RevenueCat UI issue)
+  const [showPaywall, setShowPaywall] = useState(Platform.OS !== 'ios');
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      const t = setTimeout(() => setShowPaywall(true), 400);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   return (
     <Modal
@@ -36,11 +46,20 @@ const PremiumScreen: React.FC<PremiumScreenProps> = ({ onClose, onPurchased }) =
           </TouchableOpacity>
         </View>
         <View style={styles.paywallContainer}>
-          <RevenueCatUI.Paywall
-            onDismiss={onClose}
-            onPurchaseCompleted={() => onPurchased()}
-            onRestoreCompleted={() => onPurchased()}
-          />
+          {showPaywall ? (
+            <RevenueCatUI.Paywall
+              onDismiss={onClose}
+              onPurchaseCompleted={() => onPurchased()}
+              onRestoreCompleted={() => onPurchased()}
+            />
+          ) : (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+                Loading paywall...
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -61,6 +80,13 @@ const styles = StyleSheet.create({
   closeBtn: { alignSelf: 'flex-start' },
   closeText: { fontSize: 16, fontWeight: '500' },
   paywallContainer: { flex: 1 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: { fontSize: 15 },
 });
 
 export default PremiumScreen;

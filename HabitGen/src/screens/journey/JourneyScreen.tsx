@@ -11,7 +11,9 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import PremiumScreen from '../../components/PremiumScreen';
 import TimePickerStep from '../../components/TimePickerStep';
+import AuthScreen from '../../components/AuthScreen';
 import { usePremium } from '../../../App';
+import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/storage';
 import type { SleepSchedule } from '../../types';
 
@@ -173,7 +175,9 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const JourneyScreen: React.FC = () => {
   const { theme } = useTheme();
   const { isPremium, refreshPremium } = usePremium();
+  const { user } = useAuth();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
   const [showSleepScheduleForm, setShowSleepScheduleForm] = useState(false);
   const [sleepStartTime, setSleepStartTime] = useState('22:00');
@@ -212,6 +216,10 @@ const JourneyScreen: React.FC = () => {
       `Your phone will be locked for sleeping from ${sleepStartTime} to ${sleepEndTime} on ${sleepDays.map(d => DAY_LABELS[d]).join(', ')}.\n\nYou can cancel the lock anytime when it activates.`,
     );
   };
+
+  if (showAuth) {
+    return <AuthScreen onClose={() => setShowAuth(false)} />;
+  }
 
   if (showPaywall) {
     return (
@@ -310,10 +318,16 @@ const JourneyScreen: React.FC = () => {
         `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nThis is a Premium feature.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Unlock Premium',
-            onPress: () => setShowPaywall(true),
-          },
+            {
+              text: 'Unlock Premium',
+              onPress: () => {
+                if (!user) {
+                  setShowAuth(true);
+                } else {
+                  setShowPaywall(true);
+                }
+              },
+            },
         ],
       );
     }

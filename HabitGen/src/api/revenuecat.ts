@@ -1,11 +1,21 @@
+import { Platform } from 'react-native';
 import Purchases, {
   CustomerInfo,
   LOG_LEVEL,
   PurchasesOfferings,
 } from 'react-native-purchases';
 
-const API_KEY = 'test_ghPtiGxQAYDDKQKmwpcDeivBIHN';
+// RevenueCat requires separate API keys per platform. Get them from:
+// RevenueCat Dashboard > Project Settings > API Keys > [Your iOS/Android app]
+const ANDROID_API_KEY = 'test_ghPtiGxQAYDDKQKmwpcDeivBIHN';
+// Use your iOS public API key from RevenueCat (starts with appl_). If paywall fails on iOS, add the iOS app in RevenueCat and set IOS_API_KEY here.
+const IOS_API_KEY = 'test_ghPtiGxQAYDDKQKmwpcDeivBIHN';
+
 const ENTITLEMENT_ID = 'HabitGen Pro';
+
+function getApiKey(): string {
+  return Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
+}
 
 type CustomerInfoCallback = (info: CustomerInfo) => void;
 
@@ -22,7 +32,7 @@ class RevenueCatService {
         Purchases.setLogLevel(LOG_LEVEL.DEBUG);
       }
 
-      Purchases.configure({ apiKey: API_KEY, appUserID: userId });
+      Purchases.configure({ apiKey: getApiKey(), appUserID: userId });
       this.initialized = true;
 
       Purchases.addCustomerInfoUpdateListener((info: CustomerInfo) => {

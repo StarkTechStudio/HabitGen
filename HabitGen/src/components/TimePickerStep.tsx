@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  ViewToken,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
@@ -26,30 +25,36 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
   const [selectedHour, selectedMinute] = value.split(':');
   const hourRef = useRef<FlatList>(null);
   const minuteRef = useRef<FlatList>(null);
-  const hasUserScrolledHour = useRef(false);
-  const hasUserScrolledMinute = useRef(false);
   const isInitialMount = useRef(true);
 
-  const onHourViewable = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (!hasUserScrolledHour.current) return;
-      const middle = viewableItems[Math.floor(viewableItems.length / 2)];
-      if (middle?.item) {
-        onChange(`${middle.item}:${selectedMinute}`);
+  const clampIndex = useCallback((idx: number, len: number) => {
+    return Math.max(0, Math.min(idx, Math.max(0, len - 1)));
+  }, []);
+
+  const onHourScroll = useCallback(
+    (offsetY: number) => {
+      // Because we use equal top/bottom padding, the item whose top offset
+      // is closest to the scroll offset is centered in the selection pane.
+      const rawIdx = Math.round(offsetY / ITEM_HEIGHT);
+      const idx = clampIndex(rawIdx, hours.length);
+      const nextHour = hours[idx];
+      if (nextHour && nextHour !== selectedHour) {
+        onChange(`${nextHour}:${selectedMinute}`);
       }
     },
-    [onChange, selectedMinute],
+    [clampIndex, onChange, selectedHour, selectedMinute],
   );
 
-  const onMinuteViewable = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (!hasUserScrolledMinute.current) return;
-      const middle = viewableItems[Math.floor(viewableItems.length / 2)];
-      if (middle?.item) {
-        onChange(`${selectedHour}:${middle.item}`);
+  const onMinuteScroll = useCallback(
+    (offsetY: number) => {
+      const rawIdx = Math.round(offsetY / ITEM_HEIGHT);
+      const idx = clampIndex(rawIdx, minutes.length);
+      const nextMinute = minutes[idx];
+      if (nextMinute && nextMinute !== selectedMinute) {
+        onChange(`${selectedHour}:${nextMinute}`);
       }
     },
-    [onChange, selectedHour],
+    [clampIndex, onChange, selectedHour, selectedMinute],
   );
 
   // One-time initial scroll to value on mount only (no dependency on value to avoid fighting with user)
@@ -90,8 +95,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
         <View style={[styles.selectedOverlay, {
           top: CENTER_OFFSET,
           height: ITEM_HEIGHT,
-          backgroundColor: theme.colors.primaryLight,
-          borderColor: theme.colors.primary + '30',
+          backgroundColor: theme.colors.primary + '18',
+          borderColor: theme.colors.primary + '35',
         }]} />
         {/* Hour picker */}
         <FlatList
@@ -114,10 +119,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
             offset: ITEM_HEIGHT * index,
             index,
           })}
-          onViewableItemsChanged={onHourViewable}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-          onMomentumScrollEnd={() => { hasUserScrolledHour.current = true; }}
-          onScrollEndDrag={() => { hasUserScrolledHour.current = true; }}
+          onScroll={e => onHourScroll(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
         />
 
         <Text style={[styles.separator, { color: theme.colors.primary }]}>:</Text>
@@ -143,10 +146,8 @@ const TimePickerStep: React.FC<TimePickerStepProps> = ({ value, onChange }) => {
             offset: ITEM_HEIGHT * index,
             index,
           })}
-          onViewableItemsChanged={onMinuteViewable}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-          onMomentumScrollEnd={() => { hasUserScrolledMinute.current = true; }}
-          onScrollEndDrag={() => { hasUserScrolledMinute.current = true; }}
+          onScroll={e => onMinuteScroll(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
         />
       </View>
     </View>

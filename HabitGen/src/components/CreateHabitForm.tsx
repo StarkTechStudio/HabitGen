@@ -15,8 +15,10 @@ import { generateId } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
 import DurationScrollWheel from './DurationScrollWheel';
 import PremiumScreen from './PremiumScreen';
+import AuthScreen from './AuthScreen';
 import { storage } from '../utils/storage';
 import { usePremium } from '../../App';
+import { useAuth } from '../context/AuthContext';
 
 interface CreateHabitFormProps {
   onClose: () => void;
@@ -27,6 +29,7 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
   const { theme } = useTheme();
   const { addHabit, updateHabit, habits } = useHabits();
   const { isPremium, refreshPremium } = usePremium();
+  const { user } = useAuth();
   const [name, setName] = useState(editHabit?.name || '');
   const [emoji, setEmoji] = useState(editHabit?.emoji || '\u{1F3AF}');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -45,6 +48,7 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
     editHabit?.priority,
   );
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -91,6 +95,10 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
         onClose={() => setShowEmojiPicker(false)}
       />
     );
+  }
+
+  if (showAuth) {
+    return <AuthScreen onClose={() => setShowAuth(false)} />;
   }
 
   if (showPaywall) {
@@ -254,7 +262,15 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
             ))}
           </View>
         ) : (
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!user) {
+                setShowAuth(true);
+              } else {
+                setShowPaywall(true);
+              }
+            }}>
             <View style={[styles.optionsRow, { opacity: 0.45 }]}>
               {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
                 <View
@@ -315,7 +331,15 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
             ))}
           </View>
         ) : (
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPaywall(true)}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!user) {
+                setShowAuth(true);
+              } else {
+                setShowPaywall(true);
+              }
+            }}>
             <View style={[styles.optionsRow, { opacity: 0.45 }]}>
               {(['low', 'medium', 'high'] as Priority[]).map(p => (
                 <View

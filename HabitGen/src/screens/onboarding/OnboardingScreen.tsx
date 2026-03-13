@@ -7,11 +7,13 @@ import {
   ScrollView,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { storage } from '../../utils/storage';
 import { GOALS } from '../../types';
-import TimePickerStep from '../../components/TimePickerStep';
+import WakeTimePickerStep from '../../components/WakeTimePickerStep';
+import BedTimePickerStep from '../../components/BedTimePickerStep';
 import { screenLock } from '../../api/screenlock';
 
 const { width } = Dimensions.get('window');
@@ -36,8 +38,9 @@ interface OnboardingScreenProps {
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const { theme } = useTheme();
   const [step, setStep] = useState(0);
+  // Default times: 07:00 for wake-up, 20:00 for bedtime
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
-  const [bedTime, setBedTime] = useState('23:00');
+  const [bedTime, setBedTime] = useState('20:00');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [allowedApps, setAllowedApps] = useState<string[]>(['phone', 'messages', 'gmail']);
 
@@ -71,6 +74,29 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       allowedApps,
       allowLockScreenTimer: true,
     });
+
+    // On Android, proactively ask for Device Admin permission once during onboarding
+    if (Platform.OS === 'android') {
+      Alert.alert(
+        'Enable Screen Lock',
+        'HabitGen can lock your phone during focus and sleep sessions so you stay fully focused.\n\n' +
+          '\u2022 This uses Android\u2019s Device Admin permission.\n' +
+          '\u2022 You can always disable it later from system settings.\n\n' +
+          'Would you like to enable this now?',
+        [
+          { text: 'Not Now', style: 'cancel', onPress: onComplete },
+          {
+            text: 'Enable',
+            onPress: () => {
+              screenLock.requestDeviceAdmin();
+              onComplete();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     onComplete();
   };
 
@@ -91,7 +117,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
             <Text style={[styles.stepDesc, { color: theme.colors.textSecondary }]}>
               We'll schedule your habits around your routine
             </Text>
-            <TimePickerStep value={wakeUpTime} onChange={setWakeUpTime} />
+            <WakeTimePickerStep value={wakeUpTime} onChange={setWakeUpTime} />
           </View>
         );
       case 1:
@@ -104,7 +130,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
             <Text style={[styles.stepDesc, { color: theme.colors.textSecondary }]}>
               This helps us set reasonable goals for your day
             </Text>
-            <TimePickerStep value={bedTime} onChange={setBedTime} />
+            <BedTimePickerStep value={bedTime} onChange={setBedTime} />
           </View>
         );
       case 2:
@@ -212,21 +238,33 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Progress indicator */}
-      <View style={styles.progressContainer}>
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.progressDot,
-              {
-                backgroundColor:
-                  i <= step ? theme.colors.primary : theme.colors.border,
-                width: i === step ? 24 : 8,
-              },
-            ]}
-          />
-        ))}
+      {/* Top bar with back chevron (steps > 0) + centered progress dots */}
+      <View style={styles.topBar}>
+        <View style={styles.topBarLeft}>
+          {step > 0 && (
+            <TouchableOpacity
+              onPress={() => setStep(s => s - 1)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.backArrow}>{'\u276E'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.progressContainer}>
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.progressDot,
+                {
+                  backgroundColor:
+                    i <= step ? theme.colors.primary : theme.colors.border,
+                  width: i === step ? 24 : 8,
+                },
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       <ScrollView
@@ -235,17 +273,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
         {renderStep()}
       </ScrollView>
 
-      {/* Navigation buttons */}
+      {/* Navigation button (full-width like first screen) */}
       <View style={styles.buttonContainer}>
-        {step > 0 && (
-          <TouchableOpacity
-            style={[styles.backButton, { borderColor: theme.colors.border }]}
-            onPress={() => setStep(s => s - 1)}>
-            <Text style={[styles.backButtonText, { color: theme.colors.text }]}>
-              Back
-            </Text>
-          </TouchableOpacity>
-        )}
         <TouchableOpacity
           style={[
             styles.nextButton,
@@ -253,7 +282,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
               backgroundColor: canProceed()
                 ? theme.colors.primary
                 : theme.colors.border,
-              flex: step === 0 ? 1 : undefined,
             },
           ]}
           onPress={() => {
@@ -273,15 +301,36 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    // Extra top padding so progress dots always sit clearly below
+    // camera/notch areas (e.g. Pixel 9, iPhone Dynamic Island)
+    paddingTop: Platform.OS === 'ios' ? 80 : 64,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 4,
+  },
+  topBarLeft: {
+    position: 'absolute',
+    left: 20,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  backArrow: {
+    fontSize: 18,
+    fontWeight: '200',
+    includeFontPadding: false,
+    color: '#FFFFFF',
   },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 24,
-    marginBottom: 20,
+    paddingHorizontal: 0,
+    marginBottom: 16,
   },
   progressDot: {
     height: 8,
@@ -289,7 +338,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 32,
   },
   stepContainer: {
     alignItems: 'center',
@@ -374,7 +423,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 60,
     paddingTop: 12,
   },
   backButton: {

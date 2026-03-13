@@ -90,7 +90,7 @@ const EMOJI_CATEGORIES = [
   },
 ];
 
-const EMOJI_SIZE = (width - 48 - 42) / 7;
+const EMOJI_SIZE = Math.min((width - 48 - 42) / 7, 44);
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -171,7 +171,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 56 },
+  container: { flex: 1, paddingTop: 40 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -195,7 +195,8 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 12, fontWeight: '600' },
   grid: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 24,
+    rowGap: 8,
   },
   emojiCell: {
     justifyContent: 'center',

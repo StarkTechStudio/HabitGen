@@ -30,7 +30,7 @@ const formatTime = (totalSec: number): string => {
 
 const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   const { theme } = useTheme();
-  const { habits, startTimer, stopTimer } = useHabits();
+  const { habits, startTimer, stopTimer, timerState } = useHabits();
   const habit = habits.find(h => h.id === habitId);
 
   const [selectedDuration, setSelectedDuration] = useState(
@@ -53,6 +53,35 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   const getBreakCount = useCallback((durationMin: number): number => {
     return Math.floor(durationMin / 30);
   }, []);
+
+  // If we arrive on this screen while a timer is already running (e.g. from Today tab banner),
+  // hydrate the local running state from the global timerState.
+  useEffect(() => {
+    if (!habit) return;
+    if (!timerState || !timerState.isRunning || timerState.habitId !== habitId) return;
+
+    const durationMin = Math.round(timerState.totalSeconds / 60);
+    const remainingSec = timerState.remainingSeconds;
+    const breakCount = getBreakCount(durationMin);
+
+    totalDurationRef.current = durationMin;
+    setSelectedDuration(durationMin);
+    setTimeLeft(remainingSec);
+    setIsRunning(true);
+    setShowFocusOverlay(true);
+
+    const elapsedMinutes = Math.floor(
+      (timerState.totalSeconds - timerState.remainingSeconds) / 60,
+    );
+    const initialSlots: boolean[] = Array(breakCount).fill(false);
+    for (let i = 0; i < breakCount; i++) {
+      const segmentEndMin = (i + 1) * 30;
+      if (elapsedMinutes >= segmentEndMin) {
+        initialSlots[i] = true; // slots in fully elapsed segments are expired
+      }
+    }
+    setBreakSlots(initialSlots);
+  }, [timerState, habit, habitId, getBreakCount]);
 
   const beginFocusSession = useCallback(() => {
     const breakCount = getBreakCount(selectedDuration);
@@ -178,24 +207,21 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     };
   }, [isOnBreak, breakTimeLeft]);
 
-  // Calculate which break slot is currently active
+  // Calculate elapsed minutes in the current focus session
   const elapsedSeconds = totalDurationRef.current * 60 - timeLeft;
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-  // Current slot index (0-based): after 30 min = slot 0, after 60 min = slot 1, etc.
-  const currentSlotIndex = Math.floor(elapsedMinutes / 30);
-  // The break for slot i is available once we pass minute i*30+30 (slot boundary)
-  // Break i becomes available at minute (i+1)*30 and expires at minute (i+2)*30
 
-  // Find which break buttons to show
+  // Find which break buttons to show.
+  // Each 30-min segment [i*30, (i+1)*30) grants one 5-min break.
+  // If a break in that segment is not taken before the segment ends, it expires.
   const availableBreaks: number[] = [];
   if (isRunning && !isOnBreak) {
     for (let i = 0; i < breakSlots.length; i++) {
-      const slotStartMin = (i + 1) * 30;
-      const slotExpireMin = (i + 2) * 30;
-      // Break is available after its 30-min mark and not yet expired
+      const segmentStartMin = i * 30;
+      const segmentEndMin = (i + 1) * 30;
       if (
-        elapsedMinutes >= slotStartMin &&
-        elapsedMinutes < slotExpireMin &&
+        elapsedMinutes >= segmentStartMin &&
+        elapsedMinutes < segmentEndMin &&
         !breakSlots[i]
       ) {
         availableBreaks.push(i);
@@ -203,15 +229,15 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     }
   }
 
-  // Auto-expire breaks that have passed their window
+  // Auto-expire breaks that have passed their 30-min segment window
   useEffect(() => {
     if (!isRunning || isOnBreak) return;
     setBreakSlots(prev => {
       const updated = [...prev];
       let changed = false;
       for (let i = 0; i < updated.length; i++) {
-        const slotExpireMin = (i + 2) * 30;
-        if (elapsedMinutes >= slotExpireMin && !updated[i]) {
+        const segmentEndMin = (i + 1) * 30;
+        if (elapsedMinutes >= segmentEndMin && !updated[i]) {
           updated[i] = true; // expired
           changed = true;
         }
@@ -260,6 +286,7 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
   if (isRunning) {
     const totalBreakCount = breakSlots.length;
     const usedBreakCount = breakSlots.filter(Boolean).length;
+    const remainingBreaks = Math.max(totalBreakCount - usedBreakCount, 0);
 
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -270,6 +297,14 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
           habitEmoji={habit.emoji}
           timeRemaining={formatTime(timeLeft)}
           onRequestStop={handleStopEarly}
+          showBreakSection={breakSlots.length > 0}
+          breakButtonEnabled={availableBreaks.length > 0}
+          remainingBreaks={remainingBreaks}
+          onTakeBreak={() => {
+            if (availableBreaks.length > 0) {
+              handleTakeBreak(availableBreaks[0]);
+            }
+          }}
         />
 
         {/* Break overlay */}
@@ -291,27 +326,6 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
           </View>
         )}
 
-        {/* Break buttons floating above focus overlay */}
-        {!isOnBreak && availableBreaks.length > 0 && (
-          <View style={styles.breakButtonContainer}>
-            {availableBreaks.map(slotIdx => (
-              <TouchableOpacity
-                key={slotIdx}
-                style={[
-                  styles.breakButton,
-                  {
-                    backgroundColor: theme.colors.success + '20',
-                    borderColor: theme.colors.success,
-                  },
-                ]}
-                onPress={() => handleTakeBreak(slotIdx)}>
-                <Text style={[styles.breakButtonText, { color: theme.colors.success }]}>
-                  {'\u{2615}'} Take 5 min Break ({usedBreakCount}/{totalBreakCount} used)
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
       </View>
     );
   }
@@ -463,21 +477,6 @@ const styles = StyleSheet.create({
   },
   breakSubtext: { fontSize: 16, textAlign: 'center', marginBottom: 8 },
   breakInfo: { fontSize: 13, textAlign: 'center' },
-  breakButtonContainer: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 110 : 90,
-    left: 24,
-    right: 24,
-    zIndex: 10001,
-    gap: 8,
-  },
-  breakButton: {
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 2,
-    alignItems: 'center',
-  },
-  breakButtonText: { fontSize: 15, fontWeight: '700' },
 });
 
 export default TimerScreen;

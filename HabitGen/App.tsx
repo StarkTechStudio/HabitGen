@@ -110,7 +110,9 @@ const AppContent: React.FC = () => {
   };
 
   const handleOnboardingComplete = () => {
-    screenLock.requestPermission();
+    // User finished onboarding; go straight to main app.
+    // We no longer show the extra "Enable Focus Mode" dialog here,
+    // since Android may already have shown a Device Admin prompt.
     setAppState('main');
   };
 
