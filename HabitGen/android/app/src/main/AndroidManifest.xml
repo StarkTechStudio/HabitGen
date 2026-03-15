@@ -34,6 +34,16 @@
             android:host="auth"
             android:path="/callback" />
         </intent-filter>
+
+        <!-- Deep link for uninstall-helper shortcut -->
+        <intent-filter>
+          <action android:name="android.intent.action.VIEW" />
+          <category android:name="android.intent.category.DEFAULT" />
+          <category android:name="android.intent.category.BROWSABLE" />
+          <data
+            android:scheme="habitgen"
+            android:host="uninstall-helper" />
+        </intent-filter>
       </activity>
 
       <receiver

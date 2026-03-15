@@ -74,29 +74,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       allowedApps,
       allowLockScreenTimer: true,
     });
-
-    // On Android, proactively ask for Device Admin permission once during onboarding
-    if (Platform.OS === 'android') {
-      Alert.alert(
-        'Enable Screen Lock',
-        'HabitGen can lock your phone during focus and sleep sessions so you stay fully focused.\n\n' +
-          '\u2022 This uses Android\u2019s Device Admin permission.\n' +
-          '\u2022 You can always disable it later from system settings.\n\n' +
-          'Would you like to enable this now?',
-        [
-          { text: 'Not Now', style: 'cancel', onPress: onComplete },
-          {
-            text: 'Enable',
-            onPress: () => {
-              screenLock.requestDeviceAdmin();
-              onComplete();
-            },
-          },
-        ],
-      );
-      return;
-    }
-
     onComplete();
   };
 

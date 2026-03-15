@@ -15,6 +15,7 @@ function getNativeModule(): {
   disableFocusLock: () => void;
   requestDeviceAdmin: () => void;
   isDeviceAdminEnabled: () => Promise<boolean>;
+  removeDeviceAdmin: () => Promise<boolean>;
 } | null {
   try {
     const mod = NativeModules?.ScreenLockModule;
@@ -122,6 +123,24 @@ class ScreenLockService {
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
     this.notifyListeners(false);
+  }
+
+  /**
+   * Used when the user explicitly chooses to uninstall HabitGen from inside the app.
+   * This removes Device Admin so Android will allow uninstall without extra steps.
+   */
+  async prepareForUninstall(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const mod = getNativeModule();
+      if (mod && typeof mod.removeDeviceAdmin === 'function') {
+        await mod.removeDeviceAdmin();
+        return true;
+      }
+    } catch (e) {
+      console.warn('[ScreenLock] Failed to remove device admin before uninstall:', e);
+    }
+    return false;
   }
 
   getIsLocked(): boolean {

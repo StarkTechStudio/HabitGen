@@ -179,6 +179,26 @@ class ScreenLockModule(reactContext: ReactApplicationContext) :
     }
 
     /**
+     * Helper for uninstall flow: remove this app as an active Device Admin so
+     * the user can uninstall without visiting system settings manually.
+     */
+    @ReactMethod
+    fun removeDeviceAdmin(promise: Promise) {
+        try {
+            val dpm = getDPM()
+            val component = getAdminComponent()
+            if (dpm.isAdminActive(component)) {
+                dpm.removeActiveAdmin(component)
+                Log.d(TAG, "Device admin deactivated for uninstall")
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing device admin", e)
+            promise.resolve(false)
+        }
+    }
+
+    /**
      * Keep the screen on for the entire focus session.
      * This wake lock stays held until disableFocusLock is called.
      */

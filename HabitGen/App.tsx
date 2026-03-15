@@ -1,10 +1,10 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { StatusBar, View, Platform, AppState } from 'react-native';
+import { StatusBar, View, Platform, AppState, Linking, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { HabitProvider } from './src/context/HabitContext';
-import AppNavigator from './src/navigation/AppNavigator';
+import AppNavigator, { navigationRef } from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import AdBanner from './src/components/AdBanner';
@@ -75,15 +75,12 @@ const AppContent: React.FC = () => {
   const { theme } = useTheme();
   const [appState, setAppState] = useState<AppState>('splash');
   const [isPremium, setIsPremium] = useState(false);
-
   useEffect(() => {
-    // Initialize services
     adMob.initialize();
     revenueCatService.initialize().then(() => {
       setIsPremium(revenueCatService.isPremium());
     });
 
-    // Listen for premium status changes - fires on purchase, restore, renewal, expiry
     const unsub = revenueCatService.onCustomerInfoUpdate((info) => {
       const premium = revenueCatService.isPremium();
       setIsPremium(premium);
@@ -102,19 +99,58 @@ const AppContent: React.FC = () => {
 
   const handleSplashFinish = async () => {
     const prefs = await storage.getUserPreferences();
-    if (prefs.onboardingComplete) {
-      setAppState('main');
-    } else {
-      setAppState('onboarding');
-    }
+    const next: AppState = prefs.onboardingComplete ? 'main' : 'onboarding';
+    setAppState(next);
   };
 
   const handleOnboardingComplete = () => {
-    // User finished onboarding; go straight to main app.
-    // We no longer show the extra "Enable Focus Mode" dialog here,
-    // since Android may already have shown a Device Admin prompt.
     setAppState('main');
   };
+
+  const showUninstallDialog = useCallback(() => {
+    if (navigationRef.isReady()) {
+      (navigationRef as any).navigate('Main', { screen: 'Account' });
+    }
+    setTimeout(() => {
+      Alert.alert(
+        "Don't Uninstall Me!",
+        'I am your Habit Builder Companion \u{1F622}\u{1F62D}',
+        [
+          { text: 'Keep', style: 'cancel' },
+          {
+            text: 'Uninstall',
+            style: 'destructive',
+            onPress: async () => {
+              const hadAdmin = await screenLock.prepareForUninstall();
+              const msg = hadAdmin
+                ? 'Admin permission removed. You can now uninstall HabitGen from your home screen or app store.'
+                : 'You can now uninstall HabitGen from your home screen or app store.';
+              Alert.alert('Ready to Uninstall', msg);
+            },
+          },
+        ],
+      );
+    }, 500);
+  }, []);
+
+  // Handle deep link for uninstall-helper (cold launch + warm resume)
+  useEffect(() => {
+    const handleUrl = (url: string) => {
+      if (url.startsWith('habitgen://uninstall-helper')) {
+        showUninstallDialog();
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+
+    const sub = Linking.addEventListener('url', (event) => {
+      handleUrl(event.url);
+    });
+
+    return () => sub.remove();
+  }, [showUninstallDialog]);
 
   return (
     <PremiumContext.Provider value={{ isPremium, refreshPremium }}>

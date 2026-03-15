@@ -18,6 +18,7 @@ import PremiumScreen from '../../components/PremiumScreen';
 import { usePremium } from '../../../App';
 import { revenueCatService } from '../../api/revenuecat';
 import RevenueCatUI from 'react-native-purchases-ui';
+import { screenLock } from '../../api/screenlock';
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
@@ -205,6 +206,32 @@ const AccountScreen: React.FC = () => {
           label: 'Clear All Data',
           emoji: '\u{1F5D1}\u{FE0F}',
           onPress: handleClearData,
+          destructive: true,
+        },
+        {
+          label: 'Uninstall HabitGen',
+          emoji: '\u{1F614}',
+          onPress: async () => {
+            Alert.alert(
+              "Don't Uninstall Me!",
+              'I am your Habit Builder Companion 😢😭',
+              [
+                { text: 'Keep', style: 'cancel' },
+                {
+                  text: 'Uninstall',
+                  style: 'destructive',
+                  onPress: async () => {
+                    // Turn off Device Admin so the user can uninstall easily
+                    const hadAdmin = await screenLock.prepareForUninstall();
+                    const msg = hadAdmin
+                      ? 'Admin permission removed. You can now uninstall HabitGen from your home screen or app store.'
+                      : 'You can now uninstall HabitGen from your home screen or app store.';
+                    Alert.alert('Ready to Uninstall', msg);
+                  },
+                },
+              ],
+            );
+          },
           destructive: true,
         },
       ],
