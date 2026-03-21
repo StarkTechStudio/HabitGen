@@ -155,12 +155,16 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const stopNotifyHabit = useCallback(async (habitId: string) => {
     await notificationService.cancelForHabit(habitId);
+    // Remove today's pending sessions so restarting gets a clean slate
+    const today = getLocalDateString(new Date());
+    await storage.removeNotificationSessionsForHabit(habitId, today);
     const updated = habits.map(h =>
       h.id === habitId ? { ...h, notifyActive: false } : h,
     );
     setHabits(updated);
     await storage.saveHabits(updated);
-  }, [habits]);
+    await refreshData();
+  }, [habits, refreshData]);
 
   const deleteHabit = useCallback(async (id: string) => {
     const updated = habits.filter(h => h.id !== id);

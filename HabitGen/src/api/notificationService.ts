@@ -120,6 +120,7 @@ class NotificationService {
 
     const today = getLocalDateString(new Date());
     const now = Date.now();
+    const habitsWithNewSkips = new Set<string>();
 
     for (const habit of notifyActive) {
       const sessions = await storage.getNotificationSessionsForHabit(
@@ -127,14 +128,87 @@ class NotificationService {
         today,
       );
       for (const s of sessions) {
-        // Only auto-skip sessions that are still pending and past due
         if (s.status === 'pending' && s.scheduledAt < now) {
           await storage.updateNotificationSession(s.id, {
             status: 'skipped',
             respondedAt: now,
           });
+          habitsWithNewSkips.add(habit.id);
         }
       }
+    }
+
+    // Check 20% skip warning for any habit that got new skips
+    for (const habitId of habitsWithNewSkips) {
+      await this.checkSkipWarning(habitId);
+    }
+  }
+
+  async checkSkipWarning(habitId: string): Promise<void> {
+    const today = getLocalDateString(new Date());
+    const todaySessions = await storage.getNotificationSessionsForHabit(habitId, today);
+    const habits = await storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit?.notifyConfig) return;
+
+    const total = habit.notifyConfig.frequencyCount;
+    const skippedCount = todaySessions.filter(s => s.status === 'skipped').length;
+    const skipPercent = Math.round((skippedCount / total) * 100);
+    const halfThreshold = Math.ceil(total * 0.5);
+    const warnThreshold = Math.ceil(total * 0.2);
+
+    await this.initialize();
+    const warningChannel = 'habitgen-warnings';
+    await notifee.createChannel({
+      id: warningChannel,
+      name: 'Habit Warnings',
+      importance: AndroidImportance.HIGH,
+    });
+
+    if (skippedCount >= halfThreshold) {
+      await this.cancelForHabit(habitId);
+
+      const streak = await storage.getStreak(habitId);
+      if (streak.currentStreak > 0) {
+        await storage.updateStreak({
+          ...streak,
+          currentStreak: streak.currentStreak - 1,
+        });
+      }
+
+      const habitName = habit.name;
+      const habitEmoji = habit.emoji;
+
+      const updatedHabits = habits.filter(h => h.id !== habitId);
+      await storage.saveHabits(updatedHabits);
+      await storage.removeNotificationSessionsForHabit(habitId, today);
+
+      await notifee.displayNotification({
+        id: `skip_warning_${habitId}_${today}`,
+        title: `\u{26A0}\u{FE0F} ${habitEmoji} ${habitName}`,
+        body: `Missed over 50% \u{2014} ${habitName} is gone. Time for a fresh start!`,
+        android: {
+          channelId: warningChannel,
+          importance: AndroidImportance.HIGH,
+          smallIcon: 'ic_launcher',
+          pressAction: { id: 'default' },
+        },
+      });
+      return;
+    }
+
+    if (skippedCount >= warnThreshold) {
+      await notifee.displayNotification({
+        id: `skip_warning_${habitId}_${today}`,
+        title: `\u{26A0}\u{FE0F} ${habit.emoji} ${habit.name}`,
+        body: `${skipPercent}% missed \u{2014} act now or lose your streak + habit!`,
+        android: {
+          channelId: warningChannel,
+          importance: AndroidImportance.HIGH,
+          smallIcon: 'ic_launcher',
+          pressAction: { id: 'default' },
+        },
+      });
     }
   }
 

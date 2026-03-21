@@ -159,6 +159,17 @@ async function getNotificationSessionsForHabit(
   );
 }
 
+async function removeNotificationSessionsForHabit(
+  habitId: string,
+  date: string,
+): Promise<void> {
+  const sessions = await getNotificationSessions();
+  const filtered = sessions.filter(
+    s => !(s.habitId === habitId && s.date === date),
+  );
+  await saveNotificationSessions(filtered);
+}
+
 // Pending notification actions (from background/headless - processed by main app)
 async function appendPendingNotifAction(action: PendingNotifAction): Promise<void> {
   const raw = await AsyncStorage.getItem(KEYS.PENDING_NOTIF_ACTIONS);
@@ -195,6 +206,7 @@ export const storage = {
   addNotificationSession,
   updateNotificationSession,
   getNotificationSessionsForHabit,
+  removeNotificationSessionsForHabit,
   appendPendingNotifAction,
   getAndClearPendingNotifActions,
   clearAll,

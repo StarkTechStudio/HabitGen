@@ -16,10 +16,11 @@ async function ensureWarningChannel(): Promise<void> {
 }
 
 /**
- * Check if skipped sessions have reached 20% threshold for a habit
- * and send a warning notification if so.
+ * Check skip thresholds:
+ * - 20%+: Warning notification
+ * - 50%+: Delete habit, reduce streak by 1, show deletion notification
  */
-async function checkSkipThresholdWarning(habitId: string): Promise<void> {
+async function checkSkipThresholds(habitId: string): Promise<void> {
   const today = getLocalDateString(new Date());
   const todaySessions = await storage.getNotificationSessionsForHabit(habitId, today);
   const habits = await storage.getHabits();
@@ -28,15 +29,67 @@ async function checkSkipThresholdWarning(habitId: string): Promise<void> {
 
   const total = habit.notifyConfig.frequencyCount;
   const skippedCount = todaySessions.filter(s => s.status === 'skipped').length;
-  const threshold = Math.ceil(total * 0.2);
+  const skipPercent = Math.round((skippedCount / total) * 100);
+  const halfThreshold = Math.ceil(total * 0.5);
+  const warnThreshold = Math.ceil(total * 0.2);
 
-  // Only warn once — exactly when we cross the 20% boundary
-  if (skippedCount === threshold) {
-    await ensureWarningChannel();
+  await ensureWarningChannel();
+
+  if (skippedCount >= halfThreshold) {
+    // Cancel all notifications for this habit
+    const prefix = `habit_${habitId}_`;
+    const triggerIds = await notifee.getTriggerNotificationIds();
+    for (const id of triggerIds.filter((tid: string) => tid.startsWith(prefix))) {
+      await notifee.cancelNotification(id);
+    }
+    const displayed = await notifee.getDisplayedNotifications();
+    for (const n of displayed) {
+      if (n.id?.startsWith(prefix)) {
+        await notifee.cancelNotification(n.id);
+      }
+    }
+
+    // Reduce streak by 1 (min 0)
+    const streak = await storage.getStreak(habitId);
+    if (streak.currentStreak > 0) {
+      await storage.updateStreak({
+        ...streak,
+        currentStreak: streak.currentStreak - 1,
+      });
+    }
+
+    const habitName = habit.name;
+    const habitEmoji = habit.emoji;
+
+    // Delete the habit
+    const updatedHabits = habits.filter(h => h.id !== habitId);
+    await storage.saveHabits(updatedHabits);
+
+    // Clean up sessions
+    await storage.removeNotificationSessionsForHabit(habitId, today);
+
+    // Show deletion notification
     await notifee.displayNotification({
       id: `skip_warning_${habitId}_${today}`,
-      title: `\u{26A0}\u{FE0F} ${habit.emoji} ${habit.name} - Warning`,
-      body: `You already skipped ${Math.round((skippedCount / total) * 100)}% of your habit progress. If you continue like this you will lose your streak and the habit will be automatically deleted.`,
+      title: `\u{26A0}\u{FE0F} ${habitEmoji} ${habitName}`,
+      body: `Missed over 50% \u{2014} ${habitName} is gone. Time for a fresh start!`,
+      android: {
+        channelId: WARNING_CHANNEL,
+        importance: AndroidImportance.HIGH,
+        smallIcon: 'ic_launcher',
+        pressAction: { id: 'default' },
+      },
+    });
+
+    DeviceEventEmitter.emit(NOTIF_SESSION_UPDATED);
+    return;
+  }
+
+  if (skippedCount >= warnThreshold) {
+    await notifee.displayNotification({
+      id: `skip_warning_${habitId}_${today}`,
+      title: `\u{26A0}\u{FE0F} ${habit.emoji} ${habit.name}`,
+      body: `${skipPercent}% missed \u{2014} act now or lose your streak + habit!`,
       android: {
         channelId: WARNING_CHANNEL,
         importance: AndroidImportance.HIGH,
@@ -82,7 +135,7 @@ export async function handleNotificationAction(
       }
 
       if (status === 'skipped' && habitId) {
-        await checkSkipThresholdWarning(habitId);
+        await checkSkipThresholds(habitId);
       }
 
       DeviceEventEmitter.emit(NOTIF_SESSION_UPDATED);
@@ -122,7 +175,7 @@ export async function handleNotificationAction(
         }
 
         if (habitId) {
-          await checkSkipThresholdWarning(habitId);
+          await checkSkipThresholds(habitId);
         }
 
         DeviceEventEmitter.emit(NOTIF_SESSION_UPDATED);

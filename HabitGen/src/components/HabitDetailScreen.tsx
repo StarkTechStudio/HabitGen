@@ -125,18 +125,20 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
             </Text>
           </TouchableOpacity>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={onEdit}
-              disabled={isTimerRunning || notifyActive}
-              style={{ opacity: isTimerRunning || notifyActive ? 0.4 : 1 }}>
-              <Text style={[styles.editText, { color: theme.colors.primary }]}>
-                Edit
-              </Text>
-            </TouchableOpacity>
+            {!isNotifyMode && (
+              <TouchableOpacity
+                onPress={onEdit}
+                disabled={isTimerRunning}
+                style={{ opacity: isTimerRunning ? 0.4 : 1 }}>
+                <Text style={[styles.editText, { color: theme.colors.primary }]}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={handleDelete}
-              disabled={isTimerRunning}
-              style={{ opacity: isTimerRunning ? 0.4 : 1 }}>
+              disabled={isTimerRunning || notifyActive}
+              style={{ opacity: isTimerRunning || notifyActive ? 0.4 : 1 }}>
               <Text style={[styles.deleteText, { color: theme.colors.error }]}>
                 Delete
               </Text>
