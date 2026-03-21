@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,20 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../api/supabase';
 
+let GoogleSigninModule: typeof import('@react-native-google-signin/google-signin') | null = null;
+try {
+  GoogleSigninModule = require('@react-native-google-signin/google-signin');
+} catch {
+  // Native module not available yet — app needs a native rebuild
+}
+
 type AuthMode = 'login' | 'signup' | 'verify';
 
 interface AuthScreenProps {
   onClose: () => void;
 }
+
+const WEB_CLIENT_ID = '506503251834-4nmjnvjcptlosipfh3v3ide62nvp9aef.apps.googleusercontent.com';
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
   const { theme } = useTheme();
@@ -29,6 +38,10 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    GoogleSigninModule?.GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
+  }, []);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -62,28 +75,41 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onClose }) => {
   };
 
   const handleGoogleSignIn = async () => {
-    // Deep-link back into the native app after Google OAuth completes
-    const redirectTo = Platform.select({
-      ios: 'habitgen://auth/callback',
-      android: 'habitgen://auth/callback',
-      default: undefined,
-    });
+    if (!GoogleSigninModule) {
+      Alert.alert(
+        'Rebuild Required',
+        'Google Sign-In native module is not available. Please rebuild the app.',
+      );
+      return;
+    }
 
+    const { GoogleSignin, isSuccessResponse } = GoogleSigninModule;
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signOut();
+      const response = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(response)) {
+        throw new Error('Google sign-in was cancelled.');
+      }
+
+      const idToken = response.data?.idToken;
+      if (!idToken) {
+        throw new Error('No ID token received from Google.');
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
-        options: {
-          redirectTo,
-          queryParams: {
-            client_id: '506503251834-mvkrt8qs19g7eufms57mratf1r3rn1cp.apps.googleusercontent.com',
-          },
-          skipBrowserRedirect: false,
-        },
+        token: idToken,
       });
       if (error) throw error;
+
+      onClose();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Google sign-in failed.');
+      if (e?.code !== 'SIGN_IN_CANCELLED') {
+        Alert.alert('Error', e.message || 'Google sign-in failed.');
+      }
     } finally {
       setLoading(false);
     }

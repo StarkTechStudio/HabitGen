@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,10 +16,12 @@ import { storage } from '../../utils/storage';
 import { useHabits } from '../../context/HabitContext';
 import AuthScreen from '../../components/AuthScreen';
 import PremiumScreen from '../../components/PremiumScreen';
+import WakeTimePickerStep from '../../components/WakeTimePickerStep';
+import BedTimePickerStep from '../../components/BedTimePickerStep';
 import { usePremium } from '../../../App';
 import { revenueCatService } from '../../api/revenuecat';
 import RevenueCatUI from 'react-native-purchases-ui';
-import { screenLock } from '../../api/screenlock';
+
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
@@ -27,7 +30,17 @@ const AccountScreen: React.FC = () => {
   const { isPremium, refreshPremium } = usePremium();
   const [showAuth, setShowAuth] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
+  const [wakeUpTime, setWakeUpTime] = useState('07:00');
+  const [bedTime, setBedTime] = useState('23:00');
+  const [editTimeType, setEditTimeType] = useState<'wake' | 'bed' | null>(null);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    storage.getUserPreferences().then(prefs => {
+      if (prefs.wakeUpTime) setWakeUpTime(prefs.wakeUpTime);
+      if (prefs.bedTime) setBedTime(prefs.bedTime);
+    });
+  }, []);
   const bottomSafe = Platform.OS === 'android' ? Math.max(insets.bottom, 24) : insets.bottom;
 
   if (showAuth) {
@@ -200,38 +213,29 @@ const AccountScreen: React.FC = () => {
       ],
     },
     {
+      title: 'Schedule',
+      items: [
+        {
+          label: 'Wake Up Time',
+          emoji: '\u{2600}\u{FE0F}',
+          onPress: () => setEditTimeType('wake'),
+          rightText: wakeUpTime,
+        },
+        {
+          label: 'Bed Time',
+          emoji: '\u{1F319}',
+          onPress: () => setEditTimeType('bed'),
+          rightText: bedTime,
+        },
+      ],
+    },
+    {
       title: 'Data',
       items: [
         {
           label: 'Clear All Data',
           emoji: '\u{1F5D1}\u{FE0F}',
           onPress: handleClearData,
-          destructive: true,
-        },
-        {
-          label: 'Uninstall HabitGen',
-          emoji: '\u{1F614}',
-          onPress: async () => {
-            Alert.alert(
-              "Don't Uninstall Me!",
-              'I am your Habit Builder Companion 😢😭',
-              [
-                { text: 'Keep', style: 'cancel' },
-                {
-                  text: 'Uninstall',
-                  style: 'destructive',
-                  onPress: async () => {
-                    // Turn off Device Admin so the user can uninstall easily
-                    const hadAdmin = await screenLock.prepareForUninstall();
-                    const msg = hadAdmin
-                      ? 'Admin permission removed. You can now uninstall HabitGen from your home screen or app store.'
-                      : 'You can now uninstall HabitGen from your home screen or app store.';
-                    Alert.alert('Ready to Uninstall', msg);
-                  },
-                },
-              ],
-            );
-          },
           destructive: true,
         },
       ],
@@ -320,6 +324,50 @@ const AccountScreen: React.FC = () => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <Modal
+        visible={editTimeType !== null}
+        transparent
+        animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              {editTimeType === 'wake' ? 'Wake Up Time' : 'Bed Time'}
+            </Text>
+            {editTimeType === 'wake' && (
+              <WakeTimePickerStep
+                value={wakeUpTime}
+                onChange={setWakeUpTime}
+              />
+            )}
+            {editTimeType === 'bed' && (
+              <BedTimePickerStep
+                value={bedTime}
+                onChange={setBedTime}
+              />
+            )}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { borderColor: theme.colors.border }]}
+                onPress={() => setEditTimeType(null)}>
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
+                onPress={async () => {
+                  await storage.updateUserPreferences(
+                    editTimeType === 'wake' ? { wakeUpTime } : { bedTime },
+                  );
+                  setEditTimeType(null);
+                }}>
+                <Text style={styles.modalButtonTextPrimary}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -365,6 +413,40 @@ const styles = StyleSheet.create({
   settingLabel: { fontSize: 14, fontWeight: '500', flex: 1 },
   rightText: { fontSize: 12, fontWeight: '600' },
   bottomSpacer: { height: 24 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+  },
+  modalButtonPrimary: {
+    borderWidth: 0,
+  },
+  modalButtonText: { fontSize: 16, fontWeight: '600' },
+  modalButtonTextPrimary: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });
 
 export default AccountScreen;

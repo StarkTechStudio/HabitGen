@@ -5,10 +5,16 @@ import {
   NativeModules,
   NativeEventSubscription,
 } from 'react-native';
+import type { AllowedAppConfig } from '../types';
 
 type FocusCallback = (isFocused: boolean) => void;
 
-const DEFAULT_ALLOWED_APPS = ['Phone', 'Messages', 'Gmail'];
+const DEFAULT_ALLOWED_APPS = ['Phone', 'Calculator', 'Music'];
+
+export interface InstalledMusicApp {
+  packageName: string;
+  label: string;
+}
 
 function getNativeModule(): {
   enableFocusLock: () => void;
@@ -16,6 +22,9 @@ function getNativeModule(): {
   requestDeviceAdmin: () => void;
   isDeviceAdminEnabled: () => Promise<boolean>;
   removeDeviceAdmin: () => Promise<boolean>;
+  launchAllowedApp: (appType: string) => Promise<boolean>;
+  getInstalledMusicApps: () => Promise<InstalledMusicApp[]>;
+  launchPackage: (packageName: string) => Promise<boolean>;
 } | null {
   try {
     const mod = NativeModules?.ScreenLockModule;
@@ -25,11 +34,17 @@ function getNativeModule(): {
   }
 }
 
+const DEFAULT_APP_CONFIGS: AllowedAppConfig[] = [
+  { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', launchType: 'phone' },
+  { id: 'calculator', label: 'Calculator', emoji: '\u{1F5A9}', launchType: 'calculator' },
+];
+
 class ScreenLockService {
   private isLocked = false;
   private listeners: FocusCallback[] = [];
   private appStateSubscription: NativeEventSubscription | null = null;
   private allowedApps: string[] = DEFAULT_ALLOWED_APPS;
+  private appConfigs: AllowedAppConfig[] = DEFAULT_APP_CONFIGS;
 
   async isDeviceAdminEnabled(): Promise<boolean> {
     if (Platform.OS !== 'android') return false;
@@ -80,6 +95,27 @@ class ScreenLockService {
 
   getAllowedApps(): string[] {
     return this.allowedApps;
+  }
+
+  setAppConfigs(configs: AllowedAppConfig[]): void {
+    this.appConfigs = configs;
+  }
+
+  getAppConfigs(): AllowedAppConfig[] {
+    return this.appConfigs;
+  }
+
+  async getInstalledMusicApps(): Promise<InstalledMusicApp[]> {
+    if (Platform.OS === 'android') {
+      try {
+        const mod = getNativeModule();
+        if (mod) return await mod.getInstalledMusicApps();
+      } catch {}
+    }
+    return [
+      { packageName: 'apple-music', label: 'Apple Music' },
+      { packageName: 'spotify', label: 'Spotify' },
+    ];
   }
 
   async startLock(): Promise<void> {
@@ -139,6 +175,43 @@ class ScreenLockService {
       }
     } catch (e) {
       console.warn('[ScreenLock] Failed to remove device admin before uninstall:', e);
+    }
+    return false;
+  }
+
+  async launchApp(appId: string): Promise<boolean> {
+    const config = this.appConfigs.find(c => c.id === appId);
+    if (!config) return false;
+
+    if (config.launchType === 'music_package' && config.packageName) {
+      if (Platform.OS === 'android') {
+        try {
+          const mod = getNativeModule();
+          if (mod) return await mod.launchPackage(config.packageName);
+        } catch {}
+        return false;
+      }
+      const { Linking } = require('react-native');
+      try { await Linking.openURL('music://'); return true; } catch {}
+      return false;
+    }
+
+    if (Platform.OS === 'android') {
+      try {
+        const mod = getNativeModule();
+        if (mod) return await mod.launchAllowedApp(config.launchType);
+      } catch {}
+      return false;
+    }
+    const { Linking } = require('react-native');
+    const urls: Record<string, string> = {
+      phone: 'tel:',
+      messages: 'sms:',
+      calculator: 'calc://',
+    };
+    const url = urls[config.launchType];
+    if (url) {
+      try { await Linking.openURL(url); return true; } catch {}
     }
     return false;
   }

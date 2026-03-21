@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
+import { getTodayDateString } from '../utils/helpers';
 
 interface HabitDetailScreenProps {
   habitId: string;
@@ -24,7 +25,14 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
   onStartTimer,
 }) => {
   const { theme } = useTheme();
-  const { habits, sessions, timerState, deleteHabit, getHabitStreak } = useHabits();
+  const {
+    habits,
+    sessions,
+    timerState,
+    deleteHabit,
+    getHabitStreak,
+    getNotifSessionsForHabit,
+  } = useHabits();
   const habit = habits.find(h => h.id === habitId);
   const streak = getHabitStreak(habitId);
   const isTimerRunning = timerState?.habitId === habitId && timerState?.isRunning;
@@ -37,6 +45,40 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
   const totalMinutes = Math.round(
     habitSessions.reduce((sum, s) => sum + s.duration, 0) / 60,
   );
+
+  // Notify mode data
+  const todayStr = getTodayDateString();
+  const isNotifyMode = habit?.habitMode === 'notify';
+  const notifySessions = isNotifyMode
+    ? getNotifSessionsForHabit(habitId, todayStr)
+    : [];
+  const totalNotifications =
+    isNotifyMode && habit?.notifyConfig?.frequencyCount
+      ? habit.notifyConfig.frequencyCount
+      : 0;
+  const intervalMinutes =
+    isNotifyMode && habit?.notifyConfig?.frequencyCount
+      ? habit.notifyConfig.durationMinutes / habit.notifyConfig.frequencyCount
+      : 0;
+  const notifyCompleted = notifySessions.filter(
+    s => s.status === 'completed',
+  ).length;
+  const notifySkipped = notifySessions.filter(
+    s => s.status === 'skipped',
+  ).length;
+  const notifyActive = isNotifyMode && habit?.notifyActive === true;
+
+  const formatInterval = (mins: number): string => {
+    if (mins >= 60) {
+      const h = Math.floor(mins / 60);
+      const m = Math.round(mins % 60);
+      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+    if (mins >= 1) {
+      return `${Math.round(mins)} min`;
+    }
+    return `${Math.round(mins * 60)} sec`;
+  };
 
   if (!habit) {
     return (
@@ -85,8 +127,8 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
           <View style={styles.headerActions}>
             <TouchableOpacity
               onPress={onEdit}
-              disabled={isTimerRunning}
-              style={{ opacity: isTimerRunning ? 0.4 : 1 }}>
+              disabled={isTimerRunning || notifyActive}
+              style={{ opacity: isTimerRunning || notifyActive ? 0.4 : 1 }}>
               <Text style={[styles.editText, { color: theme.colors.primary }]}>
                 Edit
               </Text>
@@ -109,6 +151,16 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
             {habit.name}
           </Text>
           <View style={styles.badgeRow}>
+            {/* Mode badge */}
+            <View
+              style={[
+                styles.badge,
+                { backgroundColor: theme.colors.primary + '20' },
+              ]}>
+              <Text style={[styles.badgeText, { color: theme.colors.primary }]}>
+                {habit.habitMode === 'focus' ? '\u{1F3AF} Focus' : '\u{1F514} Notify'}
+              </Text>
+            </View>
             {habit.difficulty && (
               <View style={[styles.badge, { backgroundColor: theme.colors.surfaceVariant }]}>
                 <Text style={[styles.badgeText, { color: theme.colors.textSecondary }]}>
@@ -136,54 +188,235 @@ const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
           </View>
         </View>
 
-        {/* Stats */}
-        <View style={[styles.statsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.accent }]}>
-              {'\u{1F525}'} {streak.currentStreak}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Current Streak
-            </Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-              {streak.longestStreak}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Best Streak
-            </Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.success }]}>
-              {totalMinutes} min
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Total Time
-            </Text>
-          </View>
-        </View>
+        {/* ====== NOTIFY MODE DETAIL ====== */}
+        {isNotifyMode && habit.notifyConfig && (
+          <>
+            {/* Notify config card */}
+            <View
+              style={[
+                styles.notifyConfigCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}>
+              <Text style={[styles.notifyConfigTitle, { color: theme.colors.text }]}>
+                Notification Schedule
+              </Text>
+              <View style={styles.notifyConfigRow}>
+                <View style={styles.notifyConfigItem}>
+                  <Text
+                    style={[
+                      styles.notifyConfigValue,
+                      { color: theme.colors.primary },
+                    ]}>
+                    {formatInterval(habit.notifyConfig.durationMinutes)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.notifyConfigLabel,
+                      { color: theme.colors.textMuted },
+                    ]}>
+                    Duration
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.notifyConfigDivider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+                <View style={styles.notifyConfigItem}>
+                  <Text
+                    style={[
+                      styles.notifyConfigValue,
+                      { color: theme.colors.primary },
+                    ]}>
+                    {formatInterval(intervalMinutes)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.notifyConfigLabel,
+                      { color: theme.colors.textMuted },
+                    ]}>
+                    Every
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.notifyConfigDivider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+                <View style={styles.notifyConfigItem}>
+                  <Text
+                    style={[
+                      styles.notifyConfigValue,
+                      { color: theme.colors.accent },
+                    ]}>
+                    {totalNotifications}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.notifyConfigLabel,
+                      { color: theme.colors.textMuted },
+                    ]}>
+                    Notifications
+                  </Text>
+                </View>
+              </View>
+            </View>
 
-        {/* Sessions count */}
-        <View style={[styles.sessionsCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.sessionsTitle, { color: theme.colors.text }]}>
-            Sessions
-          </Text>
-          <Text style={[styles.sessionsCount, { color: theme.colors.textSecondary }]}>
-            {completedSessions.length} completed / {habitSessions.length} total
-          </Text>
-        </View>
+            {/* Today's progress */}
+            <View
+              style={[
+                styles.notifyProgressCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}>
+              <Text
+                style={[styles.notifyProgressTitle, { color: theme.colors.text }]}>
+                Today's Progress
+              </Text>
+              {/* Progress bar */}
+              <View
+                style={[
+                  styles.progressBarBg,
+                  { backgroundColor: theme.colors.surfaceVariant },
+                ]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor:
+                        notifyCompleted >= totalNotifications
+                          ? theme.colors.success
+                          : theme.colors.primary,
+                      width:
+                        totalNotifications > 0
+                          ? `${Math.min(1, notifyCompleted / totalNotifications) * 100}%`
+                          : '0%',
+                    },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.progressText,
+                  { color: theme.colors.textSecondary },
+                ]}>
+                {notifyCompleted}/{totalNotifications} completed
+                {notifySkipped > 0 && ` \u{2022} ${notifySkipped} skipped`}
+              </Text>
+            </View>
+          </>
+        )}
 
-        {/* Start timer button */}
-        <TouchableOpacity
-          style={[styles.startButton, { backgroundColor: theme.colors.primary }]}
-          onPress={onStartTimer}>
-          <Text style={styles.startButtonText}>
-            {isTimerRunning ? 'View Timer' : 'Start Session'}
-          </Text>
-        </TouchableOpacity>
+        {/* ====== FOCUS MODE STATS ====== */}
+        {!isNotifyMode && (
+          <>
+            {/* Stats */}
+            <View
+              style={[
+                styles.statsCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.colors.accent }]}>
+                  {'\u{1F525}'} {streak.currentStreak}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+                  Current Streak
+                </Text>
+              </View>
+              <View
+                style={[styles.statDivider, { backgroundColor: theme.colors.border }]}
+              />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                  {streak.longestStreak}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+                  Best Streak
+                </Text>
+              </View>
+              <View
+                style={[styles.statDivider, { backgroundColor: theme.colors.border }]}
+              />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.colors.success }]}>
+                  {totalMinutes} min
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+                  Total Time
+                </Text>
+              </View>
+            </View>
+
+            {/* Sessions count */}
+            <View
+              style={[
+                styles.sessionsCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}>
+              <Text style={[styles.sessionsTitle, { color: theme.colors.text }]}>
+                Sessions
+              </Text>
+              <Text style={[styles.sessionsCount, { color: theme.colors.textSecondary }]}>
+                {completedSessions.length} completed / {habitSessions.length} total
+              </Text>
+            </View>
+
+            {/* Start timer button */}
+            <TouchableOpacity
+              style={[styles.startButton, { backgroundColor: theme.colors.primary }]}
+              onPress={onStartTimer}>
+              <Text style={styles.startButtonText}>
+                {isTimerRunning ? 'View Timer' : 'Start Session'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* Streak info even for notify habits */}
+        {isNotifyMode && (
+          <View
+            style={[
+              styles.statsCard,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: theme.colors.accent }]}>
+                {'\u{1F525}'} {streak.currentStreak}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+                Current Streak
+              </Text>
+            </View>
+            <View
+              style={[styles.statDivider, { backgroundColor: theme.colors.border }]}
+            />
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                {streak.longestStreak}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
+                Best Streak
+              </Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -205,9 +438,38 @@ const styles = StyleSheet.create({
   habitInfo: { alignItems: 'center', marginBottom: 28 },
   emoji: { fontSize: 64, marginBottom: 12 },
   name: { fontSize: 28, fontWeight: '800', marginBottom: 12 },
-  badgeRow: { flexDirection: 'row', gap: 8 },
+  badgeRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   badgeText: { fontSize: 13, fontWeight: '600' },
+  // Notify config card
+  notifyConfigCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 16,
+  },
+  notifyConfigTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  notifyConfigRow: { flexDirection: 'row' },
+  notifyConfigItem: { flex: 1, alignItems: 'center' },
+  notifyConfigValue: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  notifyConfigLabel: { fontSize: 11, fontWeight: '500' },
+  notifyConfigDivider: { width: 1, marginVertical: 4 },
+  // Notify progress
+  notifyProgressCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 16,
+  },
+  notifyProgressTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  progressBarBg: { height: 10, borderRadius: 5, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 5 },
+  progressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  // Stats
   statsCard: {
     flexDirection: 'row',
     borderRadius: 20,

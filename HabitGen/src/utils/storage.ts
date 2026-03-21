@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserPreferences, Habit, HabitSession, Streak, TimerState, SleepSchedule } from '../types';
+import { UserPreferences, Habit, HabitSession, Streak, TimerState, SleepSchedule, NotificationSession } from '../types';
 
 const KEYS = {
   USER_PREFS: '@habitgen_user_prefs',
@@ -7,7 +7,14 @@ const KEYS = {
   SESSIONS: '@habitgen_sessions',
   STREAKS: '@habitgen_streaks',
   TIMER: '@habitgen_timer',
+  NOTIFICATION_SESSIONS: '@habitgen_notification_sessions',
+  PENDING_NOTIF_ACTIONS: '@habitgen_pending_notif_actions',
 };
+
+export interface PendingNotifAction {
+  sessionId: string;
+  status: 'completed' | 'skipped';
+}
 
 const defaultPrefs: UserPreferences = {
   wakeUpTime: '07:00',
@@ -113,6 +120,59 @@ async function setSleepSchedule(schedule: SleepSchedule | null): Promise<void> {
   await updateUserPreferences({ sleepSchedule: schedule ?? undefined });
 }
 
+// ---- Notification Sessions ----
+
+async function getNotificationSessions(): Promise<NotificationSession[]> {
+  const data = await AsyncStorage.getItem(KEYS.NOTIFICATION_SESSIONS);
+  return data ? JSON.parse(data) : [];
+}
+
+async function saveNotificationSessions(sessions: NotificationSession[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.NOTIFICATION_SESSIONS, JSON.stringify(sessions));
+}
+
+async function addNotificationSession(session: NotificationSession): Promise<void> {
+  const sessions = await getNotificationSessions();
+  sessions.push(session);
+  await saveNotificationSessions(sessions);
+}
+
+async function updateNotificationSession(
+  sessionId: string,
+  update: Partial<NotificationSession>,
+): Promise<void> {
+  const sessions = await getNotificationSessions();
+  const idx = sessions.findIndex(s => s.id === sessionId);
+  if (idx >= 0) {
+    sessions[idx] = { ...sessions[idx], ...update };
+    await saveNotificationSessions(sessions);
+  }
+}
+
+async function getNotificationSessionsForHabit(
+  habitId: string,
+  date?: string,
+): Promise<NotificationSession[]> {
+  const sessions = await getNotificationSessions();
+  return sessions.filter(
+    s => s.habitId === habitId && (date ? s.date === date : true),
+  );
+}
+
+// Pending notification actions (from background/headless - processed by main app)
+async function appendPendingNotifAction(action: PendingNotifAction): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.PENDING_NOTIF_ACTIONS);
+  const list: PendingNotifAction[] = raw ? JSON.parse(raw) : [];
+  list.push(action);
+  await AsyncStorage.setItem(KEYS.PENDING_NOTIF_ACTIONS, JSON.stringify(list));
+}
+
+async function getAndClearPendingNotifActions(): Promise<PendingNotifAction[]> {
+  const raw = await AsyncStorage.getItem(KEYS.PENDING_NOTIF_ACTIONS);
+  await AsyncStorage.removeItem(KEYS.PENDING_NOTIF_ACTIONS);
+  return raw ? JSON.parse(raw) : [];
+}
+
 export const storage = {
   getUserPreferences,
   setUserPreferences,
@@ -130,5 +190,12 @@ export const storage = {
   saveTimerState,
   getSleepSchedule,
   setSleepSchedule,
+  getNotificationSessions,
+  saveNotificationSessions,
+  addNotificationSession,
+  updateNotificationSession,
+  getNotificationSessionsForHabit,
+  appendPendingNotifAction,
+  getAndClearPendingNotifActions,
   clearAll,
 };

@@ -34,7 +34,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);
-        // Sync on auth state change
         if (s?.user?.id) {
           revenueCatService.logIn(s.user.id);
         } else {

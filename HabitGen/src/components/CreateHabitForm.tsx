@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
-import { Habit, DEFAULT_SESSION_PRESETS, Difficulty, Priority } from '../types';
+import { Habit, DEFAULT_SESSION_PRESETS, Difficulty, Priority, HabitMode } from '../types';
 import { generateId } from '../utils/helpers';
 import EmojiPicker from './EmojiPicker';
 import DurationScrollWheel from './DurationScrollWheel';
+import NotifyDurationFrequencyPicker from './NotifyDurationFrequencyPicker';
 import PremiumScreen from './PremiumScreen';
 import AuthScreen from './AuthScreen';
 import { storage } from '../utils/storage';
@@ -33,6 +34,10 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
   const [name, setName] = useState(editHabit?.name || '');
   const [emoji, setEmoji] = useState(editHabit?.emoji || '\u{1F3AF}');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  // Habit mode: focus or notify (mandatory selection)
+  const [habitMode, setHabitMode] = useState<HabitMode>(
+    editHabit?.habitMode || 'focus',
+  );
   // Single selection for preset duration
   const [selectedPreset, setSelectedPreset] = useState<number>(
     editHabit?.sessionPresets[0] || 30,
@@ -50,6 +55,14 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
 
+  // Notify config state
+  const [notifyDuration, setNotifyDuration] = useState(
+    editHabit?.notifyConfig?.durationMinutes || 60,
+  );
+  const [notifyFrequency, setNotifyFrequency] = useState(
+    editHabit?.notifyConfig?.frequencyCount || 1,
+  );
+
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -66,15 +79,38 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
       return;
     }
 
+    // Validate notify settings
+    if (habitMode === 'notify') {
+      if (notifyDuration < 15) {
+        Alert.alert('Invalid Duration', 'Minimum notification duration is 15 minutes.');
+        return;
+      }
+      if (notifyFrequency < 1 || notifyFrequency > 24) {
+        Alert.alert('Invalid Frequency', 'Notification frequency must be between 1 and 24.');
+        return;
+      }
+    }
+
     const habit: Habit = {
       id: editHabit?.id || generateId(),
       name: trimmedName,
       emoji,
-      sessionPresets: showCustomWheel ? [customDuration] : [selectedPreset],
-      customDuration: showCustomWheel ? customDuration : selectedPreset,
+      habitMode,
+      sessionPresets: habitMode === 'focus'
+        ? (showCustomWheel ? [customDuration] : [selectedPreset])
+        : [],
+      customDuration: habitMode === 'focus'
+        ? (showCustomWheel ? customDuration : selectedPreset)
+        : 0,
       difficulty,
       priority,
       createdAt: editHabit?.createdAt || new Date().toISOString(),
+      ...(habitMode === 'notify' && {
+        notifyConfig: {
+          durationMinutes: notifyDuration,
+          frequencyCount: notifyFrequency,
+        },
+      }),
     };
 
     if (editHabit) {
@@ -166,69 +202,157 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
           maxLength={50}
         />
 
-        {/* Duration presets - SINGLE SELECTION */}
+        {/* ====== HABIT MODE SELECTOR (Mandatory) ====== */}
         <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-          Session Duration
+          Habit Mode
         </Text>
-        <View style={styles.presetsRow}>
-          {DEFAULT_SESSION_PRESETS.map(mins => (
-            <TouchableOpacity
-              key={mins}
-              style={[
-                styles.presetChip,
-                {
-                  backgroundColor: selectedPreset === mins && !showCustomWheel
-                    ? theme.colors.primary
+        <View style={styles.modeRow}>
+          <TouchableOpacity
+            onPress={() => setHabitMode('focus')}
+            style={[
+              styles.modeCard,
+              {
+                backgroundColor:
+                  habitMode === 'focus'
+                    ? theme.colors.primary + '18'
                     : theme.colors.surface,
-                  borderColor: selectedPreset === mins && !showCustomWheel
+                borderColor:
+                  habitMode === 'focus'
                     ? theme.colors.primary
                     : theme.colors.border,
-                },
-              ]}
-              onPress={() => {
-                setSelectedPreset(mins);
-                setShowCustomWheel(false);
-              }}>
-              <Text
-                style={[
-                  styles.presetText,
-                  {
-                    color: selectedPreset === mins && !showCustomWheel
-                      ? '#FFF'
-                      : theme.colors.text,
-                  },
-                ]}>
-                {mins} min
-              </Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity
-            style={[
-              styles.presetChip,
-              {
-                backgroundColor: showCustomWheel
-                  ? theme.colors.primary
-                  : theme.colors.surface,
-                borderColor: showCustomWheel
-                  ? theme.colors.primary
-                  : theme.colors.border,
               },
-            ]}
-            onPress={() => setShowCustomWheel(!showCustomWheel)}>
+            ]}>
+            <Text style={styles.modeEmoji}>{'\u{1F3AF}'}</Text>
             <Text
               style={[
-                styles.presetText,
-                { color: showCustomWheel ? '#FFF' : theme.colors.text },
+                styles.modeTitle,
+                {
+                  color:
+                    habitMode === 'focus'
+                      ? theme.colors.primary
+                      : theme.colors.text,
+                },
               ]}>
-              Custom
+              Focus
+            </Text>
+            <Text
+              style={[styles.modeDesc, { color: theme.colors.textMuted }]}>
+              Timer & screen lock
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setHabitMode('notify')}
+            style={[
+              styles.modeCard,
+              {
+                backgroundColor:
+                  habitMode === 'notify'
+                    ? theme.colors.primary + '18'
+                    : theme.colors.surface,
+                borderColor:
+                  habitMode === 'notify'
+                    ? theme.colors.primary
+                    : theme.colors.border,
+              },
+            ]}>
+            <Text style={styles.modeEmoji}>{'\u{1F514}'}</Text>
+            <Text
+              style={[
+                styles.modeTitle,
+                {
+                  color:
+                    habitMode === 'notify'
+                      ? theme.colors.primary
+                      : theme.colors.text,
+                },
+              ]}>
+              Notify
+            </Text>
+            <Text
+              style={[styles.modeDesc, { color: theme.colors.textMuted }]}>
+              Recurring reminders
             </Text>
           </TouchableOpacity>
         </View>
 
-        {showCustomWheel && (
-          <DurationScrollWheel
-            value={customDuration}
-            onChange={setCustomDuration}
+        {/* ====== FOCUS MODE OPTIONS ====== */}
+        {habitMode === 'focus' && (
+          <>
+            {/* Duration presets - SINGLE SELECTION */}
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+              Session Duration
+            </Text>
+            <View style={styles.presetsRow}>
+              {DEFAULT_SESSION_PRESETS.map(mins => (
+                <TouchableOpacity
+                  key={mins}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor: selectedPreset === mins && !showCustomWheel
+                        ? theme.colors.primary
+                        : theme.colors.surface,
+                      borderColor: selectedPreset === mins && !showCustomWheel
+                        ? theme.colors.primary
+                        : theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedPreset(mins);
+                    setShowCustomWheel(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.presetText,
+                      {
+                        color: selectedPreset === mins && !showCustomWheel
+                          ? '#FFF'
+                          : theme.colors.text,
+                      },
+                    ]}>
+                    {mins} min
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor: showCustomWheel
+                      ? theme.colors.primary
+                      : theme.colors.surface,
+                    borderColor: showCustomWheel
+                      ? theme.colors.primary
+                      : theme.colors.border,
+                  },
+                ]}
+                onPress={() => setShowCustomWheel(!showCustomWheel)}>
+                <Text
+                  style={[
+                    styles.presetText,
+                    { color: showCustomWheel ? '#FFF' : theme.colors.text },
+                  ]}>
+                  Custom
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {showCustomWheel && (
+              <DurationScrollWheel
+                value={customDuration}
+                onChange={setCustomDuration}
+              />
+            )}
+          </>
+        )}
+
+        {/* ====== NOTIFY MODE OPTIONS ====== */}
+        {habitMode === 'notify' && (
+          <NotifyDurationFrequencyPicker
+            durationMinutes={notifyDuration}
+            frequencyCount={notifyFrequency}
+            onDurationChange={setNotifyDuration}
+            onFrequencyChange={setNotifyFrequency}
           />
         )}
 
@@ -409,6 +533,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 24,
   },
+  // ---- Mode Selector ----
+  modeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  modeCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    borderWidth: 2,
+  },
+  modeEmoji: { fontSize: 30, marginBottom: 6 },
+  modeTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  modeDesc: { fontSize: 11, fontWeight: '500', textAlign: 'center' },
+  // ---- Presets ----
   presetsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

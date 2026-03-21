@@ -1,12 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Habit, HabitSession, Streak, TimerState } from '../types';
+import { AppState, DeviceEventEmitter } from 'react-native';
+import notifee from '@notifee/react-native';
+import { Habit, HabitSession, Streak, TimerState, NotificationSession } from '../types';
 import { storage } from '../utils/storage';
+import { notificationService } from '../api/notificationService';
+import { NOTIF_SESSION_UPDATED } from '../api/notificationHandlers';
+import { getLocalDateString } from '../utils/helpers';
 
 interface HabitContextType {
   habits: Habit[];
   sessions: HabitSession[];
   streaks: Streak[];
   timerState: TimerState | null;
+  notificationSessions: NotificationSession[];
   loading: boolean;
   addHabit: (habit: Habit) => Promise<void>;
   updateHabit: (habit: Habit) => Promise<void>;
@@ -16,6 +22,11 @@ interface HabitContextType {
   tickTimer: () => void;
   startBreak: () => void;
   getHabitStreak: (habitId: string) => Streak;
+  addNotifSession: (session: NotificationSession) => Promise<void>;
+  updateNotifSession: (sessionId: string, update: Partial<NotificationSession>) => Promise<void>;
+  getNotifSessionsForHabit: (habitId: string, date?: string) => NotificationSession[];
+  startNotifyHabit: (habitId: string) => Promise<{ ok: boolean; error?: string }>;
+  stopNotifyHabit: (habitId: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -26,28 +37,85 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [sessions, setSessions] = useState<HabitSession[]>([]);
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [timerState, setTimerState] = useState<TimerState | null>(null);
+  const [notificationSessions, setNotificationSessions] = useState<NotificationSession[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
-    const [h, s, st, t] = await Promise.all([
+    const [h, s, st, t, ns] = await Promise.all([
       storage.getHabits(),
       storage.getSessions(),
       storage.getStreaks(),
       storage.getTimerState(),
+      storage.getNotificationSessions(),
     ]);
     setHabits(h);
     setSessions(s);
     setStreaks(st);
     setTimerState(t);
+    setNotificationSessions(ns);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    refreshData();
+  /**
+   * Process pending notification actions from the queue, then mark
+   * past-due sessions as skipped, then refresh all data from storage.
+   * Order matters: pending queue first so completed sessions aren't
+   * overwritten by markPassedAsSkipped.
+   */
+  const syncNotificationsAndRefresh = useCallback(async () => {
+    // Step 1: Apply any queued actions (Completed/Skip from notification taps)
+    const pending = await storage.getAndClearPendingNotifActions();
+    for (const { sessionId, status } of pending) {
+      await storage.updateNotificationSession(sessionId, {
+        status,
+        respondedAt: Date.now(),
+      });
+    }
+    // Step 2: Auto-skip sessions still pending whose time has passed
+    await notificationService.markPassedAsSkipped();
+    // Step 3: Refresh React state from storage
+    await refreshData();
   }, [refreshData]);
 
+  useEffect(() => {
+    syncNotificationsAndRefresh();
+  }, [syncNotificationsAndRefresh]);
+
+  // Foreground event: notification action while app is open
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(NOTIF_SESSION_UPDATED, () => {
+      syncNotificationsAndRefresh();
+    });
+    return () => sub.remove();
+  }, [syncNotificationsAndRefresh]);
+
+  // When app returns to foreground: sync and refresh (+ delayed retry for slow handlers)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        syncNotificationsAndRefresh();
+        setTimeout(() => syncNotificationsAndRefresh(), 800);
+      }
+    });
+    return () => sub.remove();
+  }, [syncNotificationsAndRefresh]);
+
+  // Cold start from notification tap
+  useEffect(() => {
+    const run = async () => {
+      const initial = await notifee.getInitialNotification();
+      if (initial?.notification?.data?.type === 'habit_reminder') {
+        await syncNotificationsAndRefresh();
+      }
+    };
+    run();
+  }, [syncNotificationsAndRefresh]);
+
   const addHabit = useCallback(async (habit: Habit) => {
-    const updated = [...habits, habit];
+    const toSave = habit.habitMode === 'notify'
+      ? { ...habit, notifyActive: false }
+      : habit;
+    const updated = [...habits, toSave];
     setHabits(updated);
     await storage.saveHabits(updated);
   }, [habits]);
@@ -58,10 +126,47 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await storage.saveHabits(updated);
   }, [habits]);
 
+  const startNotifyHabit = useCallback(async (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit || habit.habitMode !== 'notify' || !habit.notifyConfig) {
+      return { ok: false, error: 'Invalid habit' };
+    }
+    try {
+      const hasPermission = await notificationService.requestPermission();
+      if (!hasPermission) {
+        return { ok: false, error: 'Notification permission is required. Please enable it in Settings.' };
+      }
+      const validation = await notificationService.validateTimeWindow(habit);
+      if (!validation.valid) {
+        return { ok: false, error: validation.reason };
+      }
+      await notificationService.scheduleForHabit({ ...habit, notifyActive: true });
+      const updated = habits.map(h =>
+        h.id === habitId ? { ...h, notifyActive: true } : h,
+      );
+      setHabits(updated);
+      await storage.saveHabits(updated);
+      await refreshData();
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'Failed to start' };
+    }
+  }, [habits, refreshData]);
+
+  const stopNotifyHabit = useCallback(async (habitId: string) => {
+    await notificationService.cancelForHabit(habitId);
+    const updated = habits.map(h =>
+      h.id === habitId ? { ...h, notifyActive: false } : h,
+    );
+    setHabits(updated);
+    await storage.saveHabits(updated);
+  }, [habits]);
+
   const deleteHabit = useCallback(async (id: string) => {
     const updated = habits.filter(h => h.id !== id);
     setHabits(updated);
     await storage.saveHabits(updated);
+    notificationService.cancelForHabit(id).catch(() => {});
   }, [habits]);
 
   const startTimer = useCallback((habitId: string, durationMinutes: number) => {
@@ -119,7 +224,7 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       endTime: now,
       duration: elapsed,
       completed,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(new Date()),
     };
 
     await storage.addSession(session);
@@ -127,13 +232,13 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Update streak
     const streak = await storage.getStreak(timerState.habitId);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString(new Date());
 
     if (completed) {
       if (streak.lastCompletedDate === today) {
         // Already completed today, no change
       } else {
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        const yesterday = getLocalDateString(new Date(Date.now() - 86400000));
         const newCurrent = streak.lastCompletedDate === yesterday
           ? streak.currentStreak + 1
           : 1;
@@ -186,6 +291,30 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [streaks]);
 
+  const addNotifSession = useCallback(async (session: NotificationSession) => {
+    setNotificationSessions(prev => [...prev, session]);
+    await storage.addNotificationSession(session);
+  }, []);
+
+  const updateNotifSession = useCallback(async (
+    sessionId: string,
+    update: Partial<NotificationSession>,
+  ) => {
+    setNotificationSessions(prev =>
+      prev.map(s => s.id === sessionId ? { ...s, ...update } : s),
+    );
+    await storage.updateNotificationSession(sessionId, update);
+  }, []);
+
+  const getNotifSessionsForHabit = useCallback(
+    (habitId: string, date?: string): NotificationSession[] => {
+      return notificationSessions.filter(
+        s => s.habitId === habitId && (date ? s.date === date : true),
+      );
+    },
+    [notificationSessions],
+  );
+
   return (
     <HabitContext.Provider
       value={{
@@ -193,6 +322,7 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         sessions,
         streaks,
         timerState,
+        notificationSessions,
         loading,
         addHabit,
         updateHabit,
@@ -202,6 +332,11 @@ export const HabitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         tickTimer,
         startBreak,
         getHabitStreak,
+        addNotifSession,
+        updateNotifSession,
+        getNotifSessionsForHabit,
+        startNotifyHabit,
+        stopNotifyHabit,
         refreshData,
       }}>
       {children}

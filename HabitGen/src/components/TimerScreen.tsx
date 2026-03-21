@@ -7,7 +7,6 @@ import {
   Alert,
   BackHandler,
   Platform,
-  AppState,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
@@ -93,47 +92,8 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     startTimer(habitId, selectedDuration);
   }, [selectedDuration, getBreakCount, habitId, startTimer]);
 
-  const pendingStartRef = useRef(false);
-
-  // Listen for app coming back to foreground (after Device Admin settings)
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', async (nextState) => {
-      if (nextState === 'active' && pendingStartRef.current) {
-        pendingStartRef.current = false;
-        const enabled = await screenLock.isDeviceAdminEnabled();
-        if (enabled) {
-          beginFocusSession();
-        }
-      }
-    });
-    return () => sub.remove();
-  }, [beginFocusSession]);
-
   const handleStart = async () => {
     const breakCount = getBreakCount(selectedDuration);
-
-    if (Platform.OS === 'android') {
-      const adminEnabled = await screenLock.isDeviceAdminEnabled();
-      if (!adminEnabled) {
-        Alert.alert(
-          'Permission Required',
-          'HabitGen needs Device Admin permission to lock your phone during focus sessions.\n\n' +
-            'This keeps you focused by preventing you from leaving the app. ' +
-            'The permission is automatically removed when the timer stops, so you can always uninstall the app.',
-          [
-            {text: 'Cancel', style: 'cancel'},
-            {
-              text: 'Grant Permission',
-              onPress: () => {
-                pendingStartRef.current = true;
-                screenLock.requestDeviceAdmin();
-              },
-            },
-          ],
-        );
-        return;
-      }
-    }
 
     Alert.alert(
       'Start Focus Session',
@@ -196,6 +156,7 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
           if (prev <= 1) {
             clearInterval(breakIntervalRef.current!);
             setIsOnBreak(false);
+            screenLock.startLock();
             return 0;
           }
           return prev - 1;
@@ -254,6 +215,7 @@ const TimerScreen: React.FC<TimerScreenProps> = ({ habitId, onClose }) => {
     });
     setIsOnBreak(true);
     setBreakTimeLeft(5 * 60);
+    screenLock.stopLock();
   };
 
   const handleStopEarly = () => {

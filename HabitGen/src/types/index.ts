@@ -2,12 +2,21 @@ export type ThemeMode = 'light' | 'dark';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type Priority = 'low' | 'medium' | 'high';
+export type HabitMode = 'focus' | 'notify';
 
 export interface SleepSchedule {
   enabled: boolean;
   startTime: string; // "22:00"
   endTime: string;   // "07:00"
   days: number[];    // 0 = Sunday, 1 = Monday, ...
+}
+
+export interface AllowedAppConfig {
+  id: string;
+  label: string;
+  emoji: string;
+  launchType: 'phone' | 'messages' | 'calculator' | 'music_package';
+  packageName?: string;
 }
 
 export interface UserPreferences {
@@ -18,21 +27,49 @@ export interface UserPreferences {
   onboardingComplete: boolean;
   isPremium: boolean;
   allowedApps?: string[];
+  allowedAppConfigs?: AllowedAppConfig[];
   sleepSchedule?: SleepSchedule;
   /** When true, show focus timer on lock screen (Android, like power saver mode). */
   allowLockScreenTimer?: boolean;
+}
+
+/**
+ * Configuration for notify-mode habits.
+ * durationMinutes: total active window in minutes, in 15-min increments (e.g. 600 = 10 hours)
+ * frequencyCount: how many notifications to send within the window (1–24)
+ * The interval between notifications is derived: durationMinutes / frequencyCount
+ */
+export interface NotifyConfig {
+  durationMinutes: number;   // min 15, in 15-min increments
+  frequencyCount: number;    // 1–24
+}
+
+/**
+ * Tracks a single notification response for a notify-mode habit on a given day.
+ */
+export interface NotificationSession {
+  id: string;
+  habitId: string;
+  date: string;           // YYYY-MM-DD
+  scheduledAt: number;     // timestamp when notification was scheduled
+  respondedAt?: number;    // timestamp when user responded
+  status: 'pending' | 'completed' | 'skipped';
 }
 
 export interface Habit {
   id: string;
   name: string;
   emoji: string;
+  habitMode: HabitMode;          // 'focus' (default) or 'notify'
   sessionPresets: number[];
   customDuration: number;
   difficulty?: Difficulty;
   priority?: Priority;
   createdAt: string;
   isTimerRunning?: boolean;
+  notifyConfig?: NotifyConfig;   // only when habitMode === 'notify'
+  /** When true, notifications are actively scheduled for this notify habit */
+  notifyActive?: boolean;
 }
 
 export interface HabitSession {

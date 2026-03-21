@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,16 @@ import {
   Dimensions,
   BackHandler,
   Platform,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { screenLock } from '../api/screenlock';
+import type { AllowedAppConfig } from '../types';
+
+const FALLBACK_APPS: AllowedAppConfig[] = [
+  { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', launchType: 'phone' },
+  { id: 'calculator', label: 'Calculator', emoji: '\u{1F5A9}', launchType: 'calculator' },
+];
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const RING_SIZE = SCREEN_WIDTH * 0.58;
@@ -41,21 +48,33 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
   onTakeBreak,
 }) => {
   const { theme } = useTheme();
-  const allowedApps = screenLock.getAllowedApps();
   const opacity = useRef(new Animated.Value(0)).current;
+  const configs = screenLock.getAppConfigs();
+  const allowedApps = configs.length > 0 ? configs : FALLBACK_APPS;
+
+  const handleOpenApp = useCallback(async (appId: string) => {
+    const ok = await screenLock.launchApp(appId);
+    if (!ok) {
+      Alert.alert('Unavailable', 'Could not open the app on this device.');
+    }
+  }, []);
   const ringRotate = useRef(new Animated.Value(0)).current;
   const pulseScale = useRef(new Animated.Value(1)).current;
 
+  const isFirstMount = useRef(true);
+
   useEffect(() => {
     if (isActive) {
-      screenLock.startLock();
+      if (isFirstMount.current) {
+        screenLock.startLock();
+        isFirstMount.current = false;
+      }
       Animated.timing(opacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }).start();
 
-      // Rotating ring animation
       const rotate = Animated.loop(
         Animated.timing(ringRotate, {
           toValue: 1,
@@ -65,7 +84,6 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
       );
       rotate.start();
 
-      // Subtle pulse
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseScale, { toValue: 1.03, duration: 2000, useNativeDriver: true }),
@@ -78,7 +96,6 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
 
       return () => {
         backHandler.remove();
-        screenLock.stopLock();
         rotate.stop();
         pulse.stop();
       };
@@ -162,23 +179,21 @@ const FocusOverlay: React.FC<FocusOverlayProps> = ({
           </View>
         )}
 
-        {/* Allowed apps section */}
+        {/* Allowed apps – tappable to open */}
         <View style={styles.infoSection}>
           <View style={[styles.infoCard, { backgroundColor: '#1C1C1E' }]}>
-            <Text style={styles.infoTitle}>Allowed during focus</Text>
+            <Text style={styles.infoTitle}>Quick Access</Text>
             <View style={styles.allowedRow}>
-              {allowedApps.slice(0, 3).map((app, i) => (
-                <View key={app} style={[styles.allowedChip, { backgroundColor: '#1A3A1A' }]}>
-                  <Text style={styles.allowedText}>
-                    {app === 'Phone' ? '\u{1F4DE}' : app === 'Messages' ? '\u{1F4AC}' : app === 'Gmail' ? '\u{2709}\u{FE0F}' : ''} {app}
-                  </Text>
-                </View>
+              {allowedApps.map(app => (
+                <TouchableOpacity
+                  key={app.id}
+                  style={styles.appButton}
+                  activeOpacity={0.7}
+                  onPress={() => handleOpenApp(app.id)}>
+                  <Text style={styles.appButtonEmoji}>{app.emoji}</Text>
+                  <Text style={styles.appButtonLabel}>{app.label}</Text>
+                </TouchableOpacity>
               ))}
-            </View>
-            <View style={[styles.blockedRow, { backgroundColor: '#3A1A1A', borderRadius: 10, padding: 8, marginTop: 6 }]}>
-              <Text style={styles.blockedText}>
-                {'\u{1F6AB}'} Social media apps are blocked
-              </Text>
             </View>
           </View>
         </View>
@@ -330,15 +345,16 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginBottom: 10,
   },
-  allowedRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  allowedChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+  allowedRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
+  appButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#2C2C2E',
   },
-  allowedText: { fontSize: 13, fontWeight: '600', color: '#34C759' },
-  blockedRow: {},
-  blockedText: { fontSize: 13, fontWeight: '600', color: '#FF453A' },
+  appButtonEmoji: { fontSize: 26, marginBottom: 4 },
+  appButtonLabel: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   bottomSection: {
     paddingHorizontal: 24,
     paddingBottom: Platform.OS === 'ios' ? 44 : 32,

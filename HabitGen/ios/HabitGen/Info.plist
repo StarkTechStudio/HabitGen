@@ -68,19 +68,5 @@
 			</array>
 		</dict>
 	</array>
-	<!-- Home Screen Quick Actions (3D Touch / long-press menu) -->
-	<key>UIApplicationShortcutItems</key>
-	<array>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>com.starktechstudio.habitgen.dont-uninstall</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Don&#x27;t remove our app!</string>
-			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>I&#x27;m your Habit Companion</string>
-			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeHeart</string>
-		</dict>
-	</array>
 </dict>
 </plist>

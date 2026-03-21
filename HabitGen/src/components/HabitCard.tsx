@@ -44,7 +44,16 @@ const HabitCard: React.FC<HabitCardProps> = ({
       <View style={styles.leftSection}>
         <Text style={styles.emoji}>{habit.emoji}</Text>
         <View style={styles.info}>
-          <Text style={[styles.name, { color: theme.colors.text }]}>{habit.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, { color: theme.colors.text }]}>{habit.name}</Text>
+            {habit.habitMode === 'focus' && (
+              <View style={[styles.modeBadge, { backgroundColor: theme.colors.primary + '20' }]}>
+                <Text style={[styles.modeBadgeText, { color: theme.colors.primary }]}>
+                  {'\u{1F3AF}'} Focus
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={styles.metaRow}>
             {streak.currentStreak > 0 && (
               <Text style={[styles.streakText, { color: theme.colors.accent }]}>
@@ -88,7 +97,10 @@ const styles = StyleSheet.create({
   leftSection: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   emoji: { fontSize: 36, marginRight: 14 },
   info: { flex: 1 },
-  name: { fontSize: 16, fontWeight: '700' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
+  modeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  modeBadgeText: { fontSize: 11, fontWeight: '700' },
   metaRow: { flexDirection: 'row', gap: 10, marginTop: 4, flexWrap: 'wrap' },
   streakText: { fontSize: 12, fontWeight: '600' },
   doneText: { fontSize: 12, fontWeight: '600' },

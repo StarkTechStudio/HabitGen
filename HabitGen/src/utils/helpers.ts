@@ -39,8 +39,22 @@ export function getGreeting(): string {
   return 'Good evening';
 }
 
+/**
+ * Returns today's date as YYYY-MM-DD in LOCAL timezone.
+ * Must use local dates everywhere to avoid UTC offset mismatches.
+ */
 export function getTodayDateString(): string {
-  return new Date().toISOString().split('T')[0];
+  return getLocalDateString(new Date());
+}
+
+/**
+ * Format any Date as YYYY-MM-DD in LOCAL timezone.
+ */
+export function getLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export function getDaysBetween(date1: string, date2: string): number {

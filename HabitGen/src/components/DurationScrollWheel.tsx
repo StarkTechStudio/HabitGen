@@ -67,7 +67,7 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
   );
 
   // Commit the final value when scroll ends
-  const onMomentumScrollEnd = useCallback(
+  const commitValue = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = e.nativeEvent.contentOffset.y;
       const idx = Math.round(offsetY / ITEM_HEIGHT);
@@ -149,7 +149,8 @@ const DurationScrollWheel: React.FC<DurationScrollWheelProps> = ({
           })}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          onMomentumScrollEnd={onMomentumScrollEnd}
+          onMomentumScrollEnd={commitValue}
+          onScrollEndDrag={commitValue}
           onLayout={scrollToValue}
         />
       </View>

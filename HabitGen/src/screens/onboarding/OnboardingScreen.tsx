@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,27 +8,22 @@ import {
   Dimensions,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { storage } from '../../utils/storage';
 import { GOALS } from '../../types';
+import type { AllowedAppConfig } from '../../types';
 import WakeTimePickerStep from '../../components/WakeTimePickerStep';
 import BedTimePickerStep from '../../components/BedTimePickerStep';
-import { screenLock } from '../../api/screenlock';
+import { screenLock, InstalledMusicApp } from '../../api/screenlock';
 
 const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 4;
 
-const FOCUS_APPS = [
-  { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', locked: true },
-  { id: 'messages', label: 'Messages', emoji: '\u{1F4AC}', locked: true },
-  { id: 'gmail', label: 'Gmail', emoji: '\u{2709}\u{FE0F}', locked: false },
-  { id: 'youtube', label: 'YouTube', emoji: '\u{1F4FA}', locked: false },
-  { id: 'maps', label: 'Maps', emoji: '\u{1F5FA}\u{FE0F}', locked: false },
-  { id: 'music', label: 'Music', emoji: '\u{1F3B5}', locked: false },
-  { id: 'calculator', label: 'Calculator', emoji: '\u{1F522}', locked: false },
-  { id: 'camera', label: 'Camera', emoji: '\u{1F4F7}', locked: false },
-  { id: 'clock', label: 'Clock', emoji: '\u{23F0}', locked: false },
+const SECOND_APP_OPTIONS = [
+  { id: 'messages', label: 'Messages', emoji: '\u{1F4AC}' },
+  { id: 'calculator', label: 'Calculator', emoji: '\u{1F5A9}' },
 ];
 
 interface OnboardingScreenProps {
@@ -38,11 +33,22 @@ interface OnboardingScreenProps {
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const { theme } = useTheme();
   const [step, setStep] = useState(0);
-  // Default times: 07:00 for wake-up, 20:00 for bedtime
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
   const [bedTime, setBedTime] = useState('20:00');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  const [allowedApps, setAllowedApps] = useState<string[]>(['phone', 'messages', 'gmail']);
+  const [secondApp, setSecondApp] = useState<string>('calculator');
+  const [installedMusicApps, setInstalledMusicApps] = useState<InstalledMusicApp[]>([]);
+  const [selectedMusicApp, setSelectedMusicApp] = useState<InstalledMusicApp | null>(null);
+  const [loadingMusic, setLoadingMusic] = useState(false);
+
+  useEffect(() => {
+    setLoadingMusic(true);
+    screenLock.getInstalledMusicApps().then(apps => {
+      setInstalledMusicApps(apps);
+      if (apps.length > 0) setSelectedMusicApp(apps[0]);
+      setLoadingMusic(false);
+    });
+  }, []);
 
   const toggleGoal = (id: string) => {
     setSelectedGoals(prev =>
@@ -50,20 +56,22 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
     );
   };
 
-  const toggleApp = (id: string) => {
-    const app = FOCUS_APPS.find(a => a.id === id);
-    if (app?.locked) return; // Phone & Messages are always allowed
-    setAllowedApps(prev => {
-      if (prev.includes(id)) return prev.filter(a => a !== id);
-      if (prev.length >= 3) return prev; // Max 3 apps
-      return [...prev, id];
-    });
-  };
-
   const handleFinish = async () => {
-    const appLabels = allowedApps.map(id => FOCUS_APPS.find(a => a.id === id)?.label || id);
-    screenLock.setAllowedApps(appLabels);
-
+    const secondOpt = SECOND_APP_OPTIONS.find(o => o.id === secondApp)!;
+    const configs: AllowedAppConfig[] = [
+      { id: 'phone', label: 'Phone', emoji: '\u{1F4DE}', launchType: 'phone' },
+      { id: secondApp, label: secondOpt.label, emoji: secondOpt.emoji, launchType: secondApp as 'messages' | 'calculator' },
+    ];
+    if (selectedMusicApp) {
+      configs.push({
+        id: `music_${selectedMusicApp.packageName}`,
+        label: selectedMusicApp.label,
+        emoji: '\u{1F3B5}',
+        launchType: 'music_package',
+        packageName: selectedMusicApp.packageName,
+      });
+    }
+    screenLock.setAppConfigs(configs);
     await storage.setUserPreferences({
       wakeUpTime,
       bedTime,
@@ -71,7 +79,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       theme: 'dark',
       onboardingComplete: true,
       isPremium: false,
-      allowedApps,
+      allowedApps: configs.map(c => c.id),
+      allowedAppConfigs: configs,
       allowLockScreenTimer: true,
     });
     onComplete();
@@ -79,6 +88,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 
   const canProceed = () => {
     if (step === 2) return selectedGoals.length > 0;
+    if (step === 3) return selectedMusicApp !== null;
     return true;
   };
 
@@ -156,56 +166,103 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       case 3:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepEmoji}>{'\u{1F512}'}</Text>
+            <Text style={styles.stepEmoji}>{'\u{1F4F1}'}</Text>
             <Text style={[styles.stepTitle, { color: theme.colors.text }]}>
               Focus Mode Apps
             </Text>
             <Text style={[styles.stepDesc, { color: theme.colors.textSecondary }]}>
-              Choose up to 3 apps accessible during focus sessions (Phone + Messages + one more).
-              Phone and Messages are always allowed.
+              Choose 3 apps you can access while the timer is running
             </Text>
-            <View style={styles.appsGrid}>
-              {FOCUS_APPS.map(app => {
-                const isSelected = allowedApps.includes(app.id);
-                const isLocked = app.locked;
-                return (
-                  <TouchableOpacity
-                    key={app.id}
-                    style={[
-                      styles.appCard,
-                      {
-                        backgroundColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.surface,
-                        borderColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.border,
-                        opacity: isLocked ? 0.8 : 1,
-                      },
-                    ]}
-                    onPress={() => toggleApp(app.id)}
-                    activeOpacity={0.7}
-                    disabled={isLocked}>
-                    <Text style={styles.appEmoji}>{app.emoji}</Text>
-                    <Text
-                      style={[
-                        styles.appLabel,
-                        { color: isSelected ? '#FFF' : theme.colors.text },
-                      ]}>
-                      {app.label}
-                    </Text>
-                    {isLocked && (
-                      <Text style={[styles.appRequired, { color: isSelected ? '#FFF' : theme.colors.textMuted }]}>
-                        Required
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+
+            {/* App 1: Phone (fixed) */}
+            <View style={styles.appSection}>
+              <Text style={[styles.appSectionLabel, { color: theme.colors.textSecondary }]}>
+                App 1 — Always available
+              </Text>
+              <View style={[styles.fixedAppCard, { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary }]}>
+                <Text style={styles.appCardEmoji}>{'\u{1F4DE}'}</Text>
+                <Text style={[styles.appCardLabel, { color: theme.colors.text }]}>Phone</Text>
+                <View style={[styles.lockedBadge, { backgroundColor: theme.colors.primary }]}>
+                  <Text style={styles.lockedBadgeText}>Default</Text>
+                </View>
+              </View>
             </View>
-            <Text style={[styles.appNote, { color: theme.colors.textMuted }]}>
-              {allowedApps.length}/3 apps selected
-            </Text>
+
+            {/* App 2: Messages or Calculator */}
+            <View style={styles.appSection}>
+              <Text style={[styles.appSectionLabel, { color: theme.colors.textSecondary }]}>
+                App 2 — Choose one
+              </Text>
+              <View style={styles.appOptionsRow}>
+                {SECOND_APP_OPTIONS.map(opt => {
+                  const isSelected = secondApp === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      style={[
+                        styles.appOptionCard,
+                        {
+                          backgroundColor: isSelected ? theme.colors.primary + '20' : theme.colors.surface,
+                          borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                        },
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => setSecondApp(opt.id)}>
+                      <Text style={styles.appCardEmoji}>{opt.emoji}</Text>
+                      <Text style={[styles.appCardLabel, { color: isSelected ? theme.colors.primary : theme.colors.text }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* App 3: Music apps from device */}
+            <View style={styles.appSection}>
+              <Text style={[styles.appSectionLabel, { color: theme.colors.textSecondary }]}>
+                App 3 — Choose a music app
+              </Text>
+              {loadingMusic ? (
+                <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 16 }} />
+              ) : installedMusicApps.length === 0 ? (
+                <Text style={[styles.noAppsText, { color: theme.colors.textSecondary }]}>
+                  No music apps found on your device
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.musicScrollContent}>
+                  {installedMusicApps.map(app => {
+                    const isSelected = selectedMusicApp?.packageName === app.packageName;
+                    return (
+                      <TouchableOpacity
+                        key={app.packageName}
+                        style={[
+                          styles.musicAppCard,
+                          {
+                            backgroundColor: isSelected ? theme.colors.primary + '20' : theme.colors.surface,
+                            borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                          },
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => setSelectedMusicApp(app)}>
+                        <Text style={styles.appCardEmoji}>{'\u{1F3B5}'}</Text>
+                        <Text
+                          style={[
+                            styles.musicAppLabel,
+                            { color: isSelected ? theme.colors.primary : theme.colors.text },
+                          ]}
+                          numberOfLines={2}>
+                          {app.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
           </View>
         );
       default:
@@ -362,38 +419,79 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  appsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
+  appSection: {
     width: '100%',
+    marginBottom: 18,
   },
-  appCard: {
-    width: (width - 76) / 3,
-    paddingVertical: 16,
-    borderRadius: 16,
+  appSectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  fixedAppCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
+  },
+  appCardEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  appCardLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  lockedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  lockedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  appOptionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  appOptionCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  musicScrollContent: {
+    paddingRight: 12,
+    gap: 10,
+  },
+  musicAppCard: {
+    width: (width - 76) / 3,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
-  appEmoji: {
-    fontSize: 28,
-    marginBottom: 6,
-  },
-  appLabel: {
+  musicAppLabel: {
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
+    marginTop: 4,
   },
-  appRequired: {
-    fontSize: 9,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  appNote: {
-    fontSize: 13,
-    fontWeight: '600',
+  noAppsText: {
+    fontSize: 14,
+    textAlign: 'center',
     marginTop: 16,
   },
   buttonContainer: {
