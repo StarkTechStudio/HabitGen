@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Dimensions,
 } from 'react-native';
+import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Rect as SvgRect } from 'react-native-svg';
 import { useTheme } from '../../context/ThemeContext';
 import PremiumScreen from '../../components/PremiumScreen';
 import TimePickerStep from '../../components/TimePickerStep';
@@ -17,6 +19,9 @@ import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/storage';
 import type { SleepSchedule } from '../../types';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH - 40;
+
 interface Journey {
   id: string;
   title: string;
@@ -25,6 +30,8 @@ interface Journey {
   days: number;
   painPoint: string;
   features: string[];
+  habitCount: number;
+  gradient: string[];
 }
 
 const journeys: Journey[] = [
@@ -35,6 +42,8 @@ const journeys: Journey[] = [
     description: 'Hourly water reminders with sound alarm. Never forget to hydrate.',
     days: 14,
     painPoint: 'Forgetting to drink enough water throughout the day',
+    habitCount: 4,
+    gradient: ['#0D7377', '#2DD4BF'],
     features: [
       'Hourly notification reminders',
       'Sound alarm with Complete/Cancel buttons',
@@ -44,11 +53,13 @@ const journeys: Journey[] = [
   },
   {
     id: 'screen_detox',
-    title: 'Screen Time Detox',
+    title: 'Digital Detox',
     emoji: '\u{1F4F5}',
-    description: 'Reduce social media usage with timed lockouts and mindful breaks.',
+    description: 'Reclaim your attention and reconnect with the physical world around you.',
     days: 21,
     painPoint: 'Spending too much time on social media and phone',
+    habitCount: 5,
+    gradient: ['#134E4A', '#0D7377'],
     features: [
       'Scheduled phone-free intervals',
       'Social media blocking reminders',
@@ -58,11 +69,13 @@ const journeys: Journey[] = [
   },
   {
     id: 'sleep',
-    title: 'Better Sleep Routine',
+    title: 'Better Sleep',
     emoji: '\u{1F634}',
-    description: 'Wind-down reminders and consistent sleep schedule training.',
+    description: 'Master your evening rituals for the deep, restorative rest you deserve.',
     days: 30,
     painPoint: 'Irregular sleep schedule and poor sleep quality',
+    habitCount: 7,
+    gradient: ['#1E3A5F', '#0D7377'],
     features: [
       'Bedtime wind-down alerts (30 min before)',
       'Blue light reminder notifications',
@@ -77,6 +90,8 @@ const journeys: Journey[] = [
     description: 'Progressive daily sessions from 5 to 30 minutes.',
     days: 30,
     painPoint: 'Stress, anxiety, and inability to focus',
+    habitCount: 6,
+    gradient: ['#0D7377', '#5EEAD4'],
     features: [
       'Guided session lengths (5 min to 30 min)',
       'Daily mindfulness reminders',
@@ -86,11 +101,13 @@ const journeys: Journey[] = [
   },
   {
     id: 'fitness',
-    title: 'Fitness Foundations',
+    title: 'Fitness Kickstart',
     emoji: '\u{1F4AA}',
-    description: 'Progressive daily workouts from beginner to intermediate.',
+    description: 'Build a sustainable foundation for strength and vital energy.',
     days: 21,
     painPoint: 'Sedentary lifestyle and lack of exercise motivation',
+    habitCount: 4,
+    gradient: ['#134E4A', '#2DD4BF'],
     features: [
       'Daily workout reminders',
       'Progressive difficulty increase',
@@ -105,6 +122,8 @@ const journeys: Journey[] = [
     description: 'Build a 20-minute daily reading habit with progress tracking.',
     days: 30,
     painPoint: 'Not reading enough or struggling to make time for books',
+    habitCount: 4,
+    gradient: ['#3D6B66', '#0D7377'],
     features: [
       'Daily reading time reminders',
       'Page/chapter tracking',
@@ -116,9 +135,11 @@ const journeys: Journey[] = [
     id: 'morning',
     title: 'Morning Routine',
     emoji: '\u{2600}\u{FE0F}',
-    description: 'Design and stick to a powerful 60-minute morning ritual.',
+    description: 'Start your day with purpose and stillness before the world wakes up.',
     days: 21,
     painPoint: 'Waking up groggy and rushing through mornings',
+    habitCount: 6,
+    gradient: ['#0D7377', '#134E4A'],
     features: [
       'Step-by-step morning checklist',
       'Wake-up alarm integration',
@@ -133,6 +154,8 @@ const journeys: Journey[] = [
     description: 'Master deep work with Pomodoro-based focus sessions.',
     days: 14,
     painPoint: 'Constant distractions and inability to concentrate',
+    habitCount: 4,
+    gradient: ['#1E3A5F', '#2DD4BF'],
     features: [
       'Timed deep work blocks',
       'Distraction logging',
@@ -147,6 +170,8 @@ const journeys: Journey[] = [
     description: 'Daily gratitude practice for improved mental health.',
     days: 30,
     painPoint: 'Negative thinking patterns and lack of appreciation',
+    habitCount: 3,
+    gradient: ['#134E4A', '#5EEAD4'],
     features: [
       'Evening gratitude prompts',
       'Three things I\'m grateful for',
@@ -161,6 +186,8 @@ const journeys: Journey[] = [
     description: 'Hourly posture check reminders with stretch exercises.',
     days: 14,
     painPoint: 'Back pain from poor sitting posture all day',
+    habitCount: 3,
+    gradient: ['#0D7377', '#3D6B66'],
     features: [
       'Hourly posture check alerts',
       'Quick stretch exercises',
@@ -318,16 +345,16 @@ const JourneyScreen: React.FC = () => {
         `${journey.painPoint}\n\nThis ${journey.days}-day journey includes:\n${journey.features.map(f => `\u{2022} ${f}`).join('\n')}\n\nThis is a Premium feature.`,
         [
           { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Unlock Premium',
-              onPress: () => {
-                if (!user) {
-                  setShowAuth(true);
-                } else {
-                  setShowPaywall(true);
-                }
-              },
+          {
+            text: 'Unlock Premium',
+            onPress: () => {
+              if (!user) {
+                setShowAuth(true);
+              } else {
+                setShowPaywall(true);
+              }
             },
+          },
         ],
       );
     }
@@ -338,119 +365,296 @@ const JourneyScreen: React.FC = () => {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Journeys</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Guided programs for your biggest pain points
-        </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.4-1.4L10 14.2l7.6-7.6L19 8l-9 9z" fill={theme.colors.primary} />
+            </Svg>
+            <Text style={[styles.brandName, { color: theme.colors.primary }]}>Habitgen</Text>
+          </View>
+          <TouchableOpacity>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke={theme.colors.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
 
+        {/* Title */}
+        <View style={styles.titleSection}>
+          <Text style={[styles.titleLine1, { color: theme.colors.text }]}>Curated</Text>
+          <Text style={[styles.titleLine2, { color: theme.colors.primary }]}>Journeys</Text>
+          <Text style={[styles.titleDesc, { color: theme.colors.textSecondary }]}>
+            Transform your life through intentional collections designed by experts to help you find balance, clarity, and strength.
+          </Text>
+        </View>
+
+        {/* Journey Cards */}
         {journeys.map(journey => (
           <TouchableOpacity
             key={journey.id}
-            style={[
-              styles.journeyCard,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: isPremium ? theme.colors.primary + '40' : theme.colors.border,
-                opacity: isPremium ? 1 : 0.75,
-              },
-            ]}
-            activeOpacity={0.7}
+            style={styles.journeyCard}
+            activeOpacity={0.85}
             onPress={() => handleJourneyPress(journey)}>
-            <View style={styles.journeyHeader}>
-              <Text style={styles.journeyEmoji}>{journey.emoji}</Text>
-              <View style={styles.journeyInfo}>
-                <View style={styles.titleRow}>
-                  <Text style={[styles.journeyTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                    {journey.title}
-                  </Text>
-                  {!isPremium && (
-                    <View style={[styles.premiumBadge, { backgroundColor: theme.colors.accent + '20' }]}>
-                      <Text style={[styles.premiumText, { color: theme.colors.accent }]}>
-                        {'\u{1F512}'} PRO
-                      </Text>
-                    </View>
-                  )}
+            {/* Gradient background using Svg */}
+            <View style={styles.journeyCardInner}>
+              <Svg width={CARD_WIDTH} height={200} style={styles.journeyBgSvg}>
+                <Defs>
+                  <SvgLinearGradient id={`grad-${journey.id}`} x1="0" y1="0" x2="1" y2="1">
+                    <Stop offset="0" stopColor={journey.gradient[0]} stopOpacity="0.95" />
+                    <Stop offset="1" stopColor={journey.gradient[1]} stopOpacity="0.85" />
+                  </SvgLinearGradient>
+                </Defs>
+                <SvgRect width={CARD_WIDTH} height={200} rx={20} fill={`url(#grad-${journey.id})`} />
+              </Svg>
+              <View style={styles.journeyCardContent}>
+                <View style={styles.journeyBadge}>
+                  <Text style={styles.journeyBadgeText}>{journey.habitCount} HABITS</Text>
                 </View>
-                <Text style={[styles.journeyDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-                  {journey.description}
-                </Text>
-                <Text style={[styles.painPoint, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                  Pain point: {journey.painPoint}
-                </Text>
+                <Text style={styles.journeyEmoji}>{journey.emoji}</Text>
+                <Text style={styles.journeyTitle}>{journey.title}</Text>
+                <Text style={styles.journeyDesc} numberOfLines={2}>{journey.description}</Text>
+                <TouchableOpacity
+                  style={styles.joinBtn}
+                  onPress={() => handleJourneyPress(journey)}>
+                  <Text style={styles.joinBtnText}>
+                    {isPremium ? 'Join Journey' : 'Unlock Journey'}
+                  </Text>
+                </TouchableOpacity>
               </View>
+              {!isPremium && (
+                <View style={styles.lockBadge}>
+                  <Text style={styles.lockBadgeText}>PRO</Text>
+                </View>
+              )}
             </View>
-            <View style={[styles.journeyFooter, { borderTopColor: theme.colors.border }]}>
-              <Text style={[styles.daysText, { color: theme.colors.textMuted }]}>
-                {journey.days} days
-              </Text>
-              <Text style={[styles.startText, { color: isPremium ? theme.colors.success : theme.colors.accent }]}>
-                {isPremium ? 'Start \u{2192}' : 'Unlock \u{2192}'}
-              </Text>
-            </View>
-            {/* Locked overlay - only for non-premium */}
-            {!isPremium && (
-              <View style={styles.lockIcon}>
-                <Text style={{ fontSize: 16 }}>{'\u{1F512}'}</Text>
-              </View>
-            )}
           </TouchableOpacity>
         ))}
 
+        {/* Personalized Section */}
+        <View style={styles.personalizedSection}>
+          <Text style={[styles.personalizedTitle, { color: theme.colors.text }]}>
+            Personalized for you
+          </Text>
+
+          <View style={[styles.personalizedCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.personalizedIconWrap, { backgroundColor: theme.colors.primaryLight }]}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                <Path d="M12 2l2.09 6.26L20 10.27l-4.91 3.82L16.18 22 12 18.27 7.82 22l1.09-7.91L4 10.27l5.91-2.01L12 2z" fill={theme.colors.primary} />
+              </Svg>
+            </View>
+            <Text style={[styles.personalizedCardTitle, { color: theme.colors.text }]}>
+              Smart Matching
+            </Text>
+            <Text style={[styles.personalizedCardDesc, { color: theme.colors.textSecondary }]}>
+              Based on your activity, we suggest journeys that fill the gaps in your daily flow.
+            </Text>
+          </View>
+
+          <View style={[styles.personalizedCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.personalizedIconWrap, { backgroundColor: theme.colors.primaryLight }]}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={theme.colors.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </View>
+            <Text style={[styles.personalizedCardTitle, { color: theme.colors.text }]}>
+              Community Driven
+            </Text>
+            <Text style={[styles.personalizedCardDesc, { color: theme.colors.textSecondary }]}>
+              Join over 10,000 others who have successfully completed these paths this month.
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        activeOpacity={0.85}>
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 56 },
-  title: { fontSize: 30, fontWeight: '800', marginBottom: 4 },
-  subtitle: { fontSize: 14, marginBottom: 20 },
-  journeyCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 14,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  journeyHeader: {
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  header: {
     flexDirection: 'row',
-    padding: 16,
-    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 56,
+    paddingBottom: 8,
   },
-  journeyEmoji: { fontSize: 36, marginRight: 14 },
-  journeyInfo: { flex: 1 },
-  titleRow: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  brandName: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  titleSection: {
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  titleLine1: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  titleLine2: {
+    fontSize: 36,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  titleDesc: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  journeyCard: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  journeyCardInner: {
+    height: 200,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  journeyBgSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  journeyCardContent: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'flex-end',
+  },
+  journeyBadge: {
+    backgroundColor: 'rgba(45, 212, 191, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  journeyBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  journeyEmoji: {
+    fontSize: 28,
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  journeyTitle: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
     marginBottom: 4,
   },
-  journeyTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
-  premiumBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+  journeyDesc: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
   },
-  premiumText: { fontSize: 10, fontWeight: '800' },
-  journeyDesc: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
-  painPoint: { fontSize: 11, fontStyle: 'italic' },
-  journeyFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
+  joinBtn: {
+    backgroundColor: 'rgba(45, 212, 191, 0.9)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
-  daysText: { fontSize: 12, fontWeight: '500' },
-  startText: { fontSize: 13, fontWeight: '700' },
-  lockIcon: {
+  joinBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  lockBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  lockBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  personalizedSection: {
+    marginTop: 24,
+  },
+  personalizedTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    marginBottom: 16,
+  },
+  personalizedCard: {
+    padding: 20,
+    borderRadius: 18,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  personalizedIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  personalizedCardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  personalizedCardDesc: {
+    fontSize: 13,
+    lineHeight: 19,
   },
   bottomSpacer: { height: 100 },
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  fabIcon: {
+    color: '#FFF',
+    fontSize: 28,
+    fontWeight: '300',
+    marginTop: -2,
+  },
+  // Sleep form styles (kept from original)
   sleepFormHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

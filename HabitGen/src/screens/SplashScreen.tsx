@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+
 interface SplashScreenProps {
   onFinish: () => void;
 }
@@ -33,9 +35,16 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           styles.logoContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
         ]}>
-        <Text style={styles.fireEmoji}>{'\u{1F525}'}</Text>
-        <Text style={[styles.appName, { color: '#FFF' }]}>HabitGen</Text>
-        <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+        <View style={styles.iconWrap}>
+          <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+              fill="#2DD4BF"
+            />
+          </Svg>
+        </View>
+        <Text style={styles.appName}>Habitgen</Text>
+        <Text style={styles.subtitle}>
           Build better habits, one day at a time
         </Text>
       </Animated.View>
@@ -46,7 +55,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0A1A19',
   },
   logoContainer: {
     flex: 1,
@@ -55,19 +64,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  fireEmoji: {
-    fontSize: 120,
-    marginBottom: 16,
+  iconWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#132625',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
   appName: {
     fontSize: 42,
     fontWeight: '800',
     letterSpacing: 1,
+    color: '#E8F5F0',
   },
   subtitle: {
     fontSize: 16,
     marginTop: 10,
     fontWeight: '400',
+    color: 'rgba(232,245,240,0.7)',
   },
 });
 

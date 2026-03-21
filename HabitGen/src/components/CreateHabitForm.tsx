@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
 import { Habit, DEFAULT_SESSION_PRESETS, Difficulty, Priority, HabitMode } from '../types';
 import { generateId } from '../utils/helpers';
+import Svg, { Path } from 'react-native-svg';
 import EmojiPicker from './EmojiPicker';
 import DurationScrollWheel from './DurationScrollWheel';
 import NotifyDurationFrequencyPicker from './NotifyDurationFrequencyPicker';
@@ -157,7 +158,10 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
         nestedScrollEnabled>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5M12 19l-7-7 7-7" stroke={theme.colors.textSecondary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
             <Text style={[styles.cancelText, { color: theme.colors.textSecondary }]}>
               Cancel
             </Text>
@@ -174,7 +178,7 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
 
         {/* Emoji selector */}
         <TouchableOpacity
-          style={[styles.emojiSelector, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+          style={[styles.emojiSelector, { backgroundColor: theme.colors.surface }]}
           onPress={() => setShowEmojiPicker(true)}>
           <Text style={styles.selectedEmoji}>{emoji}</Text>
           <Text style={[styles.emojiHint, { color: theme.colors.textMuted }]}>
@@ -191,7 +195,6 @@ const CreateHabitForm: React.FC<CreateHabitFormProps> = ({ onClose, editHabit })
             styles.input,
             {
               backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
               color: theme.colors.text,
             },
           ]}
@@ -507,15 +510,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 28,
   },
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   cancelText: { fontSize: 16, fontWeight: '500' },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerTitle: { fontSize: 18, fontWeight: '800' },
   saveText: { fontSize: 16, fontWeight: '700' },
   emojiSelector: {
     alignItems: 'center',
     padding: 24,
     borderRadius: 20,
-    borderWidth: 1,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   selectedEmoji: { fontSize: 56, marginBottom: 8 },
   emojiHint: { fontSize: 13 },
@@ -527,11 +539,15 @@ const styles = StyleSheet.create({
   },
   premiumTag: { fontSize: 10, fontWeight: '800' },
   input: {
-    borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     fontSize: 16,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   // ---- Mode Selector ----
   modeRow: {
@@ -545,7 +561,12 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 12,
     borderRadius: 18,
-    borderWidth: 2,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   modeEmoji: { fontSize: 30, marginBottom: 6 },
   modeTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },

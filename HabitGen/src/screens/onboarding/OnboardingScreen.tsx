@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '200',
     includeFontPadding: false,
-    color: '#FFFFFF',
+    color: '#94B8B0',
   },
   progressContainer: {
     flexDirection: 'row',
