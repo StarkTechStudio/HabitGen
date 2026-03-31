@@ -8,7 +8,9 @@ import {
   RefreshControl,
   Dimensions,
   Alert,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useHabits } from '../../context/HabitContext';
 import { getGreeting, getTodayDateString } from '../../utils/helpers';
@@ -18,7 +20,20 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { notificationService } from '../../api/notificationService';
 import { storage } from '../../utils/storage';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function getWeekStrip() {
+  const today = new Date();
+  const days = [];
+  for (let i = -2; i <= 4; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push({ num: d.getDate(), label: WEEKDAYS[d.getDay()], isToday: i === 0 });
+  }
+  return days;
+}
 
 const TodayScreen: React.FC = () => {
   const { theme } = useTheme();
@@ -33,11 +48,39 @@ const TodayScreen: React.FC = () => {
     stopNotifyHabit,
   } = useHabits();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const [userName, setUserName] = useState('');
 
   const todayStr = getTodayDateString();
   const todaySessions = sessions.filter(s => s.date === todayStr);
   const completedToday = todaySessions.filter(s => s.completed).length;
+
+  useFocusEffect(useCallback(() => {
+    storage.getUserPreferences().then(prefs => {
+      if (prefs?.name) setUserName(prefs.name);
+    });
+  }, []));
+
+  useFocusEffect(
+    useCallback(() => {
+      const processPending = async () => {
+        const pending = await storage.getAndClearPendingNotifications?.() ?? [];
+        for (const action of pending) {
+          if (action.type === 'complete') await notificationService.completeNotification(action.habitId);
+          if (action.type === 'skip') await notificationService.skipNotification(action.habitId);
+        }
+        refreshData();
+      };
+      processPending();
+    }, [refreshData]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshData();
+    setRefreshing(false);
+  }, [refreshData]);
 
   // Split habits by mode
   const focusHabits = habits.filter(h => h.habitMode !== 'notify');
@@ -55,286 +98,319 @@ const TodayScreen: React.FC = () => {
     0,
   );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    // Process pending queue first, then auto-skip, then refresh
-    const pending = await storage.getAndClearPendingNotifActions();
-    for (const { sessionId, status } of pending) {
-      await storage.updateNotificationSession(sessionId, {
-        status,
-        respondedAt: Date.now(),
-      });
-    }
-    await notificationService.markPassedAsSkipped();
-    await refreshData();
-    setRefreshing(false);
-  }, [refreshData]);
+  const strip = getWeekStrip();
+  const greeting = getGreeting(userName);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      const run = async () => {
-        // Process pending queue first, then auto-skip, then refresh
-        const pending = await storage.getAndClearPendingNotifActions();
-        for (const { sessionId, status } of pending) {
-          await storage.updateNotificationSession(sessionId, {
-            status,
-            respondedAt: Date.now(),
-          });
-        }
-        await notificationService.markPassedAsSkipped();
-        await refreshData();
-      };
-      run();
-    }, [refreshData]),
-  );
-
-  // Count notify completions for today stats
-  const notifyCompletedToday = notifyHabits.reduce((sum, h) => {
-    const ns = getNotifSessionsForHabit(h.id, todayStr);
-    const totalNotifications = h.notifyConfig?.frequencyCount ?? 0;
-    const completed = ns.filter(s => s.status === 'completed').length;
-    return sum + (completed >= totalNotifications && totalNotifications > 0 ? 1 : 0);
-  }, 0);
+  const topInset = insets.top + (Platform.OS === 'web' ? 0 : 0);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* FIXED HEADER - does not scroll */}
-      <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.headerContent}>
-          <Text style={[styles.greeting, { color: theme.colors.textSecondary }]}>
-            {getGreeting()}
-          </Text>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Today</Text>
-        </View>
-
-        {/* Active timer banner */}
-        {timerState?.isRunning && (
-          <TouchableOpacity
-            style={[styles.timerBanner, { backgroundColor: theme.colors.primary }]}
-            onPress={() =>
-              navigation.navigate('Timer', { habitId: timerState.habitId })
-            }>
-            <Text style={styles.timerBannerText}>
-              {'\u{1F512}'} Focus session in progress - Tap to view
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+      {/* Fixed Header */}
+      <View style={[styles.header, { paddingTop: topInset, backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        {/* Greeting */}
+        <View style={styles.greetingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.greetingText, { color: theme.colors.text }]} numberOfLines={2}>
+              {greeting.split(',')[0] + ','}
             </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Stats card */}
-        <View
-          style={[
-            styles.statsCard,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-            },
-          ]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-              {habits.length}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Habits
+            <Text style={[styles.greetingName, { color: theme.colors.text }]}>
+              {userName || 'Friend'}
             </Text>
           </View>
-          <View
-            style={[styles.statDivider, { backgroundColor: theme.colors.border }]}
-          />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.success }]}>
-              {completedToday + notifyCompletedToday}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Done Today
-            </Text>
-          </View>
-          <View
-            style={[styles.statDivider, { backgroundColor: theme.colors.border }]}
-          />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.accent }]}>
-              {'\u{1F525}'} {totalStreaks}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textMuted }]}>
-              Total Streaks
-            </Text>
-          </View>
-        </View>
-
-        {/* Section header */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Your Habits
-          </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('CreateHabit')}
-            style={[styles.addButton, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.addButtonText}>+ Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* SCROLLABLE HABITS ONLY */}
-      <ScrollView
-        style={styles.habitsList}
-        contentContainerStyle={styles.habitsContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.primary}
-          />
-        }>
-        {habits.length === 0 ? (
-          <View
-            style={[
-              styles.emptyState,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}>
-            <Text style={styles.emptyEmoji}>{'\u{1F331}'}</Text>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              No habits yet
-            </Text>
-            <Text
-              style={[styles.emptyDesc, { color: theme.colors.textSecondary }]}>
-              Tap "+ Add" to create your first habit and start building streaks
-            </Text>
+          <View style={styles.headerRight}>
+            <View style={[styles.streakBadge, { backgroundColor: '#FFF0E8' }]}>
+              <Text style={{ fontSize: 14 }}>🔥</Text>
+              <Text style={[styles.streakNum, { color: '#FF6B35' }]}>{totalStreaks}</Text>
+            </View>
             <TouchableOpacity
-              style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => navigation.navigate('CreateHabit')}>
-              <Text style={styles.emptyButtonText}>Create First Habit</Text>
+              style={[styles.addBtn, { backgroundColor: theme.colors.primary }]}
+              onPress={() => navigation.navigate('CreateHabit')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.addBtnText}>＋</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {/* Focus habits */}
-            {sortedFocusHabits.length > 0 && (
-              <>
-                {notifyHabits.length > 0 && (
-                  <Text
-                    style={[styles.subsectionTitle, { color: theme.colors.textMuted }]}>
-                    {'\u{1F3AF}'} Focus Habits
-                  </Text>
-                )}
-                {sortedFocusHabits.map(habit => (
-                  <HabitCard
-                    key={habit.id}
-                    habit={habit}
-                    streak={getHabitStreak(habit.id)}
-                    isTimerRunning={
-                      timerState?.habitId === habit.id && timerState.isRunning
-                    }
-                    todayCompleted={todaySessions.some(
-                      s => s.habitId === habit.id && s.completed,
-                    )}
-                  />
-                ))}
-              </>
-            )}
+        </View>
 
-            {/* Notify habits */}
-            {notifyHabits.length > 0 && (
-              <>
-                {sortedFocusHabits.length > 0 && (
-                  <Text
-                    style={[
-                      styles.subsectionTitle,
-                      { color: theme.colors.textMuted, marginTop: 12 },
-                    ]}>
-                    {'\u{1F514}'} Notify Habits
-                  </Text>
-                )}
-                {notifyHabits.map(habit => (
+        {/* Date strip */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+          {strip.map((d, i) => (
+            <View key={i} style={[styles.dayPill, d.isToday && { backgroundColor: theme.colors.primary }]}>
+              <Text style={[styles.dayNum, { color: d.isToday ? '#fff' : theme.colors.text }]}>{d.num}</Text>
+              <Text style={[styles.dayLabel, { color: d.isToday ? 'rgba(255,255,255,0.8)' : theme.colors.textMuted }]}>{d.label}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Scrollable habits */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.habitContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          {[
+            { val: completedToday, label: 'Done', color: theme.colors.primary },
+            { val: habits.length - completedToday, label: 'Pending', color: '#FF7043' },
+            { val: habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0, label: 'Rate %', color: '#26C6DA' },
+          ].map(s => (
+            <View key={s.label} style={[styles.statPill, { backgroundColor: s.color }]}>
+              <Text style={styles.statPillNum}>{s.val}</Text>
+              <Text style={styles.statPillLabel}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Notify habits section */}
+        {notifyHabits.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notify Habits</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: theme.colors.primaryLight }]}>
+                <Text style={[styles.sectionBadgeText, { color: theme.colors.primary }]}>{notifyHabits.length}</Text>
+              </View>
+            </View>
+            <View style={styles.gridWrap}>
+              {notifyHabits.map(habit => {
+                const sessions = getNotifSessionsForHabit(habit.id, todayStr);
+                return (
                   <NotifyHabitCard
                     key={habit.id}
                     habit={habit}
-                    todaySessions={getNotifSessionsForHabit(habit.id, todayStr)}
+                    todaySessions={sessions}
                     onStartNotify={startNotifyHabit}
                     onStopNotify={stopNotifyHabit}
                   />
-                ))}
-              </>
-            )}
+                );
+              })}
+            </View>
           </>
         )}
 
-        <View style={styles.bottomSpacer} />
+        {/* Focus habits section */}
+        {sortedFocusHabits.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Focus Habits</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: theme.colors.primaryLight }]}>
+                <Text style={[styles.sectionBadgeText, { color: theme.colors.primary }]}>{sortedFocusHabits.length}</Text>
+              </View>
+            </View>
+            <View style={styles.gridWrap}>
+              {sortedFocusHabits.map(habit => {
+                const streak = getHabitStreak(habit.id);
+                const isRunning = timerState?.habitId === habit.id && timerState.isRunning;
+                const todaySession = todaySessions.find(s => s.habitId === habit.id && s.completed);
+                return (
+                  <HabitCard
+                    key={habit.id}
+                    habit={habit}
+                    streak={streak}
+                    isTimerRunning={isRunning}
+                    todayCompleted={!!todaySession}
+                  />
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* Empty state */}
+        {habits.length === 0 && (
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
+              <Text style={{ fontSize: 48 }}>🎯</Text>
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No habits yet</Text>
+            <Text style={[styles.emptySub, { color: theme.colors.textSecondary }]}>
+              Tap the + button to create{'\n'}your first habit
+            </Text>
+            <TouchableOpacity
+              style={[styles.emptyBtn, { backgroundColor: theme.colors.primary }]}
+              onPress={() => navigation.navigate('CreateHabit')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.emptyBtnText}>＋ Add Habit</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 };
 
+export default TodayScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  fixedHeader: {
+  root: { flex: 1 },
+  header: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    zIndex: 10,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 4,
+    paddingBottom: 10,
+    paddingTop: 12,
+    gap: 12,
   },
-  headerContent: { marginBottom: 16 },
-  greeting: { fontSize: 15, fontWeight: '500', marginBottom: 2 },
-  title: { fontSize: 30, fontWeight: '800' },
-  timerBanner: {
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 14,
-    alignItems: 'center',
+  greetingText: {
+    fontSize: Math.min(width * 0.045, 16),
+    fontWeight: '600',
+    lineHeight: 22,
   },
-  timerBannerText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-  statsCard: {
+  greetingName: {
+    fontSize: Math.min(width * 0.07, 28),
+    fontWeight: '900',
+    lineHeight: 34,
+  },
+  headerRight: {
     flexDirection: 'row',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '700', marginBottom: 2 },
-  statLabel: { fontSize: 11, fontWeight: '500' },
-  statDivider: { width: 1, marginVertical: 4 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 8,
+    paddingTop: 4,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
-  addButton: {
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  streakNum: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  addBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnText: {
+    fontSize: 24,
+    color: '#fff',
+    lineHeight: 30,
+    fontWeight: '300',
+  },
+  dateStrip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingBottom: 14,
+    gap: 6,
+  },
+  dayPill: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    minWidth: 52,
+  },
+  dayNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  dayLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  habitContent: {
+    paddingTop: 12,
+    paddingHorizontal: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  statPill: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  statPillNum: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#fff',
+  },
+  statPillLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 1,
+  },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: Math.min(width * 0.05, 18),
+    fontWeight: '800',
+  },
+  sectionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 10,
   },
-  addButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-  habitsList: { flex: 1 },
-  habitsContent: { paddingHorizontal: 20, paddingTop: 4 },
-  subsectionTitle: {
-    fontSize: 13,
+  sectionBadgeText: {
+    fontSize: 12,
     fontWeight: '700',
-    marginBottom: 8,
-    marginLeft: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  emptyState: {
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  empty: {
     alignItems: 'center',
-    padding: 36,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingVertical: 48,
+    gap: 12,
   },
-  emptyEmoji: { fontSize: 44, marginBottom: 10 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6 },
-  emptyDesc: { fontSize: 13, textAlign: 'center', marginBottom: 18, lineHeight: 18 },
-  emptyButton: {
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 12,
+  emptyIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  emptyButtonText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  bottomSpacer: { height: 100 },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  emptySub: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  emptyBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });
-
-export default TodayScreen;
