@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, ActivityIndicator } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { Habit, NotificationSession } from '../types';
 import { useNavigation } from '@react-navigation/native';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - 44) / 2;
 
 interface NotifyHabitCardProps {
   habit: Habit;
@@ -27,12 +30,8 @@ const NotifyHabitCard: React.FC<NotifyHabitCardProps> = ({
   const { durationMinutes, frequencyCount } = habit.notifyConfig;
   const totalNotifications = frequencyCount;
   const intervalMinutes = frequencyCount > 0 ? durationMinutes / frequencyCount : 0;
-  const completedCount = todaySessions.filter(
-    s => s.status === 'completed',
-  ).length;
-  const skippedCount = todaySessions.filter(
-    s => s.status === 'skipped',
-  ).length;
+  const completedCount = todaySessions.filter(s => s.status === 'completed').length;
+  const skippedCount = todaySessions.filter(s => s.status === 'skipped').length;
   const notifyActive = habit.notifyActive === true;
 
   const progressPercent =
@@ -44,11 +43,9 @@ const NotifyHabitCard: React.FC<NotifyHabitCardProps> = ({
     if (mins >= 60) {
       const h = Math.floor(mins / 60);
       const m = Math.round(mins % 60);
-      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+      return m > 0 ? `${h}h ${m} min` : `${h}h`;
     }
-    if (mins >= 1) {
-      return `${Math.round(mins)}m`;
-    }
+    if (mins >= 1) return `${Math.round(mins)} min`;
     return `${Math.round(mins * 60)}s`;
   };
 
@@ -64,189 +61,225 @@ const NotifyHabitCard: React.FC<NotifyHabitCardProps> = ({
   };
 
   const handleStop = async () => {
-    setStopping(true);
-    await onStopNotify(habit.id);
-    setStopping(false);
+    Alert.alert('Stop Habit', 'Stop notifications for this habit?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Stop',
+        style: 'destructive',
+        onPress: async () => {
+          setStopping(true);
+          await onStopNotify(habit.id);
+          setStopping(false);
+        },
+      },
+    ]);
   };
+
+  const cardColors = theme.colors.cardColors;
+  const cardColor = habit.color || cardColors[Math.abs(habit.id.charCodeAt(0) + habit.id.charCodeAt(1)) % cardColors.length];
+
+  const skipWarning =
+    totalNotifications > 0 && todaySessions.length > 0 &&
+    skippedCount / todaySessions.length >= 0.2;
 
   return (
     <TouchableOpacity
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: allDone
-            ? theme.colors.success + '60'
-            : theme.colors.border,
-        },
-      ]}
+      style={[styles.card, { backgroundColor: cardColor, width: CARD_WIDTH }]}
       onPress={() => navigation.navigate('HabitDetail', { habitId: habit.id })}
-      activeOpacity={0.7}>
-      {/* Top row: emoji + info */}
+      activeOpacity={0.85}
+    >
       <View style={styles.topRow}>
-        <Text style={styles.emoji}>{habit.emoji}</Text>
-        <View style={styles.infoCol}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: theme.colors.text }]}>
-              {habit.name}
-            </Text>
-            <View
-              style={[
-                styles.modeBadge,
-                { backgroundColor: theme.colors.primary + '20' },
-              ]}>
-              <Text
-                style={[styles.modeBadgeText, { color: theme.colors.primary }]}>
-                {'\u{1F514}'} Notify
-              </Text>
-            </View>
-          </View>
-          <Text style={[styles.scheduleText, { color: theme.colors.textMuted }]}>
-            {totalNotifications}x {'\u{2022}'} every {formatInterval(intervalMinutes)} {'\u{2022}'} {formatInterval(durationMinutes)} window
-          </Text>
+        <View style={styles.emojiBox}>
+          <Text style={styles.emoji}>{habit.emoji}</Text>
+        </View>
+        <View style={[styles.statusDot, { backgroundColor: 'rgba(255,255,255,0.5)' }]}>
+          {notifyActive ? (
+            <View style={[styles.activeDot, { backgroundColor: '#4CAF50' }]} />
+          ) : (
+            <View style={styles.inactiveDot} />
+          )}
         </View>
       </View>
 
-      {/* Completed/Total and skipped/Total */}
-      <View style={styles.statsRow}>
-        <Text style={[styles.statsText, { color: theme.colors.textSecondary }]}>
-          {completedCount}/{totalNotifications} completed
-        </Text>
-        <Text style={[styles.statsText, { color: theme.colors.textSecondary }]}>
-          {skippedCount}/{totalNotifications} skipped
-        </Text>
-      </View>
+      <Text style={styles.habitName} numberOfLines={1}>{habit.name}</Text>
+      <Text style={styles.habitFreq}>
+        {frequencyCount}× · every {formatInterval(intervalMinutes)}
+      </Text>
 
       {/* Progress bar */}
-      <View style={styles.progressSection}>
-        <View
-          style={[
-            styles.progressBarBg,
-            { backgroundColor: theme.colors.surfaceVariant },
-          ]}>
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                backgroundColor: allDone
-                  ? theme.colors.success
-                  : theme.colors.primary,
-                width: `${progressPercent * 100}%`,
-              },
-            ]}
-          />
-        </View>
+      <View style={styles.progressBg}>
+        <View style={[styles.progressFill, { width: `${progressPercent * 100}%` as any }]} />
       </View>
 
-      {/* Start / Stop button */}
-      <View style={styles.actionRow}>
-        {notifyActive ? (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.error + '18', borderColor: theme.colors.error },
-            ]}
-            onPress={handleStop}
-            disabled={stopping}
-            activeOpacity={0.7}>
-            <Text style={[styles.actionButtonText, { color: theme.colors.error }]}>
-              {stopping ? '...' : '\u{23F9}\u{FE0F}'} Stop
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.success + '18', borderColor: theme.colors.success },
-            ]}
-            onPress={handleStart}
-            disabled={starting}
-            activeOpacity={0.7}>
-            <Text style={[styles.actionButtonText, { color: theme.colors.success }]}>
-              {starting ? '...' : '\u{25B6}\u{FE0F}'} Start
-            </Text>
-          </TouchableOpacity>
+      <View style={styles.statsRow}>
+        <Text style={styles.statText}>✓ {completedCount}/{totalNotifications}</Text>
+        {habit.streak > 0 && (
+          <View style={styles.streakPill}>
+            <Text style={{ fontSize: 9 }}>🔥</Text>
+            <Text style={styles.streakText}>{habit.streak}</Text>
+          </View>
         )}
       </View>
 
-      {/* Done badge */}
-      {allDone && totalNotifications > 0 && (
-        <View
-          style={[
-            styles.doneBadge,
-            { backgroundColor: theme.colors.success + '18' },
-          ]}>
-          <Text style={[styles.doneBadgeText, { color: theme.colors.success }]}>
-            {'\u{2705}'} All notifications completed for today!
-          </Text>
-        </View>
+      {skipWarning && (
+        <Text style={styles.warnText}>⚠️ 20%+ skipped</Text>
+      )}
+
+      {/* Action buttons */}
+      {notifyActive ? (
+        <TouchableOpacity
+          style={styles.stopBtn}
+          onPress={handleStop}
+          disabled={stopping}
+          activeOpacity={0.8}
+        >
+          {stopping ? (
+            <ActivityIndicator size="small" color="rgba(0,0,0,0.5)" />
+          ) : (
+            <Text style={styles.stopBtnText}>■ Stop</Text>
+          )}
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.startBtn, (allDone) && { opacity: 0.6 }]}
+          onPress={handleStart}
+          disabled={starting || allDone}
+          activeOpacity={0.8}
+        >
+          {starting ? (
+            <ActivityIndicator size="small" color="rgba(0,0,0,0.5)" />
+          ) : (
+            <Text style={styles.startBtnText}>{allDone ? '✓ Done' : '▶ Start'}</Text>
+          )}
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
 };
 
+export default NotifyHabitCard;
+
 const styles = StyleSheet.create({
   card: {
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   topRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  emojiBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.45)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  emoji: { fontSize: 36, marginRight: 14 },
-  infoCol: { flex: 1 },
-  nameRow: {
-    flexDirection: 'row',
+  emoji: { fontSize: 22 },
+  statusDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
-  name: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  modeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+  activeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  modeBadgeText: { fontSize: 11, fontWeight: '700' },
-  scheduleText: { fontSize: 12, marginTop: 4 },
+  inactiveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.25)',
+  },
+  habitName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginBottom: 2,
+  },
+  habitFreq: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.5)',
+    marginBottom: 8,
+  },
+  progressBg: {
+    height: 4,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: 4,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 2,
+  },
   statsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginBottom: 6,
   },
-  statsText: { fontSize: 13, fontWeight: '600' },
-  progressSection: { marginTop: 8 },
-  progressBarBg: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
+  statText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.5)',
   },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  actionRow: {
+  streakPill: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1.5,
     alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  actionButtonText: { fontSize: 14, fontWeight: '700' },
-  doneBadge: {
-    marginTop: 12,
-    paddingVertical: 8,
+  streakText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF6B35',
+  },
+  warnText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FF6B35',
+    marginBottom: 6,
+  },
+  startBtn: {
+    backgroundColor: 'rgba(0,0,0,0.12)',
     borderRadius: 10,
+    paddingVertical: 8,
     alignItems: 'center',
+    marginTop: 4,
   },
-  doneBadgeText: { fontSize: 13, fontWeight: '700' },
+  startBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.6)',
+  },
+  stopBtn: {
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  stopBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.6)',
+  },
 });
-
-export default NotifyHabitCard;
