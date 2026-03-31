@@ -8,7 +8,6 @@ import {
   Dimensions,
   Platform,
   Alert,
-  ActivityIndicator,
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,40 +18,30 @@ import type { AllowedAppConfig } from '../../types';
 import WakeTimePickerStep from '../../components/WakeTimePickerStep';
 import BedTimePickerStep from '../../components/BedTimePickerStep';
 import { screenLock, InstalledMusicApp } from '../../api/screenlock';
+import { MascotOnboarding } from '../../components/MascotSVG';
 
-const { width } = Dimensions.get('window');
-const TOTAL_STEPS = 4;
-
-const SECOND_APP_OPTIONS = [
-  { id: 'messages', label: 'Messages', emoji: '💬' },
-  { id: 'calculator', label: 'Calculator', emoji: '🧮' },
-];
+const { width, height } = Dimensions.get('window');
+const PURPLE = '#5B4FE8';
+const TOTAL_STEPS = 3;
 
 interface OnboardingScreenProps {
   onComplete: () => void;
 }
 
-const MASCOT_EMOJIS = ['🧘', '💪', '🏃', '⭐', '🎯'];
-
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+  const [step, setStep] = useState(0); // 0=splash, 1=wake, 2=bed, 3=goals
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
   const [bedTime, setBedTime] = useState('20:00');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  const [secondApp, setSecondApp] = useState<string>('calculator');
   const [installedMusicApps, setInstalledMusicApps] = useState<InstalledMusicApp[]>([]);
   const [selectedMusicApp, setSelectedMusicApp] = useState<InstalledMusicApp | null>(null);
-  const [loadingMusic, setLoadingMusic] = useState(false);
 
   useEffect(() => {
-    setLoadingMusic(true);
     screenLock.getInstalledMusicApps().then(apps => {
       setInstalledMusicApps(apps);
       if (apps.length > 0) setSelectedMusicApp(apps[0]);
-      setLoadingMusic(false);
     });
   }, []);
 
@@ -63,11 +52,9 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   };
 
   const handleFinish = async () => {
-    const secondOpt = SECOND_APP_OPTIONS.find(o => o.id === secondApp);
     const allowedApps: AllowedAppConfig = {
       phone: true,
       messages: true,
-      secondApp: secondOpt ? { id: secondApp, label: secondOpt.label } : undefined,
       musicApp: selectedMusicApp ?? undefined,
     };
     await storage.updateUserPreferences({
@@ -75,161 +62,110 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
       bedTime,
       goals: selectedGoals,
       allowedApps,
-      name: name.trim() || undefined,
       onboardingCompleted: true,
     });
     onComplete();
   };
 
-  const canGoNext = () => {
-    if (step === 0) return true;
-    if (step === 1) return true;
-    if (step === 2) return true;
-    if (step === 3) return true;
-    return true;
-  };
+  const topPad = insets.top + (Platform.OS === 'android' ? 16 : 0);
 
-  const gradColors = theme.colors.onboardingGradient;
+  /* ── SPLASH (step 0) ── */
+  if (step === 0) {
+    return (
+      <View style={[s0.root, { backgroundColor: PURPLE, paddingTop: topPad }]}>
+        <View style={s0.mascotWrap}>
+          <MascotOnboarding size={Math.min(width * 0.78, 200)} />
+        </View>
 
-  const renderStepContent = () => {
-    switch (step) {
-      case 0:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.cardTitle}>What's your name?</Text>
-            <Text style={styles.cardSub}>We'll personalize your experience</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Your first name..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={name}
-              onChangeText={setName}
-              maxLength={20}
-              returnKeyType="done"
-            />
-            <Text style={[styles.skipHint, { color: 'rgba(255,255,255,0.7)' }]}>
-              Optional — tap Next to skip
-            </Text>
-          </View>
-        );
-      case 1:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.cardTitle}>Wake up time ☀️</Text>
-            <Text style={styles.cardSub}>Habits only notify you after this time</Text>
-            <View style={styles.pickerWrap}>
-              <WakeTimePickerStep
-                value={wakeUpTime}
-                onChange={setWakeUpTime}
-                theme={theme}
-              />
-            </View>
-          </View>
-        );
-      case 2:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.cardTitle}>Bedtime 🌙</Text>
-            <Text style={styles.cardSub}>No reminders after this time</Text>
-            <View style={styles.pickerWrap}>
-              <BedTimePickerStep
-                value={bedTime}
-                onChange={setBedTime}
-                theme={theme}
-              />
-            </View>
-          </View>
-        );
-      case 3:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.cardTitle}>Your goals 🎯</Text>
-            <Text style={styles.cardSub}>What do you want to work on?</Text>
-            <View style={styles.goalsGrid}>
-              {GOALS.map(goal => (
-                <TouchableOpacity
-                  key={goal.id}
-                  onPress={() => toggleGoal(goal.id)}
-                  style={[
-                    styles.goalChip,
-                    selectedGoals.includes(goal.id) && styles.goalChipActive,
-                  ]}
-                >
-                  <Text style={styles.goalEmoji}>{goal.emoji}</Text>
-                  <Text style={[styles.goalLabel, selectedGoals.includes(goal.id) && styles.goalLabelActive]}>
-                    {goal.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
+        <Text style={s0.title}>Build healthy{'\n'}habits with us</Text>
+
+        <View style={[s0.bottom, { paddingBottom: insets.bottom + 32 }]}>
+          <TouchableOpacity onPress={() => setStep(1)} style={s0.cta} activeOpacity={0.85}>
+            <Text style={[s0.ctaText, { color: PURPLE }]}>Get started</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleFinish} style={s0.haveAccount}>
+            <Text style={s0.haveAccountText}>I have an account</Text>
+          </TouchableOpacity>
+          <Text style={s0.legal}>
+            By starting or signing in, you agree{'\n'}to our <Text style={s0.legalLink}>Terms of use</Text>
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  /* ── STEPS ── */
+  const visualStep = step - 1;
 
   return (
-    <View style={[styles.root, { backgroundColor: gradColors[0] }]}>
+    <View style={[s1.root, { backgroundColor: PURPLE, paddingTop: topPad }]}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + (Platform.OS === 'web' ? 0 : 20), paddingBottom: insets.bottom + 40 },
-        ]}
-        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[s1.scroll, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Mascot */}
-        <View style={styles.mascotSection}>
-          <View style={styles.mascotCircle}>
-            <Text style={styles.mascotEmoji}>{MASCOT_EMOJIS[step] || '🧘'}</Text>
-            <View style={[styles.sparkle, { top: 4, right: 12 }]}>
-              <Text style={{ fontSize: 14 }}>✨</Text>
-            </View>
-            <View style={[styles.sparkle, { bottom: 12, left: 4 }]}>
-              <Text style={{ fontSize: 10 }}>⭐</Text>
-            </View>
-          </View>
-          <Text style={styles.mainTitle}>Build healthy</Text>
-          <Text style={styles.mainTitle}>habits with us</Text>
+        <View style={s1.mascotSmall}>
+          <MascotOnboarding size={Math.min(width * 0.4, 110)} />
         </View>
 
         {/* Step dots */}
-        <View style={styles.dots}>
+        <View style={s1.dots}>
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <View key={i} style={[styles.dot, i === step && styles.dotActive, i < step && styles.dotDone]} />
+            <View key={i} style={[s1.dot, i === visualStep && s1.dotActive, i < visualStep && s1.dotDone]} />
           ))}
         </View>
 
-        {/* Card */}
-        <View style={styles.card}>{renderStepContent()}</View>
+        {/* White card */}
+        <View style={s1.card}>
+          {step === 1 && (
+            <>
+              <Text style={s1.cardTitle}>Wake up time ☀️</Text>
+              <Text style={s1.cardSub}>Habits only notify you after this time</Text>
+              <WakeTimePickerStep value={wakeUpTime} onChange={setWakeUpTime} theme={theme} />
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <Text style={s1.cardTitle}>Bedtime 🌙</Text>
+              <Text style={s1.cardSub}>No reminders after this time</Text>
+              <BedTimePickerStep value={bedTime} onChange={setBedTime} theme={theme} />
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <Text style={s1.cardTitle}>Your goals 🎯</Text>
+              <Text style={s1.cardSub}>What do you want to work on?</Text>
+              <View style={s1.goalsGrid}>
+                {GOALS.map(goal => (
+                  <TouchableOpacity
+                    key={goal.id}
+                    onPress={() => toggleGoal(goal.id)}
+                    style={[s1.goalChip, selectedGoals.includes(goal.id) && s1.goalChipActive]}
+                  >
+                    <Text style={{ fontSize: 18 }}>{goal.emoji}</Text>
+                    <Text style={[s1.goalLabel, selectedGoals.includes(goal.id) && s1.goalLabelActive]}>
+                      {goal.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
 
-        {/* CTA */}
         <TouchableOpacity
-          style={styles.cta}
-          onPress={() => {
-            if (!canGoNext()) return;
-            if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
-            else handleFinish();
-          }}
+          onPress={() => { if (step < TOTAL_STEPS) setStep(s => s + 1); else handleFinish(); }}
+          style={s1.cta}
           activeOpacity={0.85}
         >
-          <Text style={[styles.ctaText, { color: theme.colors.primary }]}>
-            {step < TOTAL_STEPS - 1 ? 'Next →' : "Let's go!"}
+          <Text style={[s1.ctaText, { color: PURPLE }]}>
+            {step < TOTAL_STEPS ? 'Next →' : "Let's go!"}
           </Text>
         </TouchableOpacity>
 
-        {step > 0 && (
-          <TouchableOpacity onPress={() => setStep(s => s - 1)} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-        )}
-
-        {step === 0 && (
-          <Text style={styles.legalText}>
-            By continuing, you agree to our Terms of use
-          </Text>
-        )}
+        <TouchableOpacity onPress={() => setStep(s => Math.max(0, s - 1))} style={s1.backBtn}>
+          <Text style={s1.backText}>← Back</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -237,53 +173,47 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 
 export default OnboardingScreen;
 
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  mascotSection: { alignItems: 'center', marginBottom: 20 },
-  mascotCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    position: 'relative',
-  },
-  mascotEmoji: { fontSize: 72 },
-  sparkle: { position: 'absolute' },
-  mainTitle: {
-    fontSize: Math.min(width * 0.09, 36),
+const s0 = StyleSheet.create({
+  root: { flex: 1, alignItems: 'center' },
+  mascotWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 },
+  title: {
+    fontSize: Math.min(width * 0.092, 36),
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: '#fff',
     textAlign: 'center',
-    lineHeight: Math.min(width * 0.11, 44),
+    lineHeight: Math.min(width * 0.115, 44),
+    paddingHorizontal: 28,
+    marginBottom: 36,
   },
-  dots: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-    marginTop: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  dotActive: {
+  bottom: { width: '100%', paddingHorizontal: 26, alignItems: 'center' },
+  cta: {
     backgroundColor: '#fff',
-    width: 28,
-    borderRadius: 4,
+    borderRadius: 18,
+    paddingVertical: 18,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 18,
   },
-  dotDone: {
-    backgroundColor: 'rgba(255,255,255,0.7)',
-  },
+  ctaText: { fontSize: 18, fontWeight: '800' },
+  haveAccount: { paddingVertical: 6, marginBottom: 20 },
+  haveAccountText: { fontSize: 14, fontWeight: '600', color: '#fff', textDecorationLine: 'underline' },
+  legal: { fontSize: 12, color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 18 },
+  legalLink: { textDecorationLine: 'underline', color: 'rgba(255,255,255,0.75)' },
+});
+
+const s1 = StyleSheet.create({
+  root: { flex: 1 },
+  scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 12 },
+  mascotSmall: { marginBottom: 12 },
+  dots: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dotActive: { backgroundColor: '#fff', width: 28, borderRadius: 4 },
+  dotDone: { backgroundColor: 'rgba(255,255,255,0.7)' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 28,
@@ -296,63 +226,21 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
-  stepContent: { width: '100%' },
-  cardTitle: {
-    fontSize: Math.min(width * 0.06, 22),
-    fontWeight: '800',
-    color: '#1A1A2E',
-    marginBottom: 4,
-  },
-  cardSub: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
-    fontWeight: '400',
-  },
-  input: {
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 16,
-    fontWeight: '600',
-    borderWidth: 1.5,
-    backgroundColor: '#F5F5F7',
-  },
-  skipHint: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 10,
-    color: '#9CA3AF',
-  },
-  pickerWrap: { width: '100%', minHeight: 150 },
-  goalsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
+  cardTitle: { fontSize: Math.min(width * 0.06, 22), fontWeight: '800', color: '#1A1A2E', marginBottom: 4 },
+  cardSub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
+  goalsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   goalChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F7',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+    backgroundColor: '#F5F5F7', borderWidth: 2, borderColor: 'transparent',
   },
-  goalChipActive: {
-    backgroundColor: '#EEF0FF',
-    borderColor: '#5B4FE8',
-  },
-  goalEmoji: { fontSize: 18 },
+  goalChipActive: { backgroundColor: '#EEF0FF', borderColor: '#5B4FE8' },
   goalLabel: { fontSize: 13, fontWeight: '700', color: '#1A1A2E' },
   goalLabelActive: { color: '#5B4FE8' },
   cta: {
     backgroundColor: '#fff',
     borderRadius: 18,
     paddingVertical: 18,
-    paddingHorizontal: 40,
     width: '100%',
     alignItems: 'center',
     shadowColor: '#000',
@@ -362,22 +250,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     marginBottom: 12,
   },
-  ctaText: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  backBtn: { paddingVertical: 12, marginBottom: 8 },
-  backText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  legalText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 8,
-    textDecorationLine: 'underline',
-  },
+  ctaText: { fontSize: 18, fontWeight: '800' },
+  backBtn: { paddingVertical: 12 },
+  backText: { color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600', textAlign: 'center' },
 });
