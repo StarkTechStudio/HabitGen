@@ -8,6 +8,8 @@ import {
   Alert,
   Platform,
   Modal,
+  Switch,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,433 +22,333 @@ import WakeTimePickerStep from '../../components/WakeTimePickerStep';
 import BedTimePickerStep from '../../components/BedTimePickerStep';
 import { usePremium } from '../../../App';
 import { revenueCatService } from '../../api/revenuecat';
-import RevenueCatUI from 'react-native-purchases-ui';
 
+const { width } = Dimensions.get('window');
+
+interface RowProps {
+  emoji: string;
+  emojiColor: string;
+  label: string;
+  sublabel?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  theme: any;
+}
+
+function SettingRow({ emoji, emojiColor, label, sublabel, right, onPress, theme }: RowProps) {
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.row, { backgroundColor: theme.colors.surface }]} activeOpacity={0.7}>
+      <View style={[styles.rowIcon, { backgroundColor: `${emojiColor}20` }]}>
+        <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      </View>
+      <View style={styles.rowText}>
+        <Text style={[styles.rowLabel, { color: theme.colors.text }]}>{label}</Text>
+        {sublabel && <Text style={[styles.rowSub, { color: theme.colors.textSecondary }]}>{sublabel}</Text>}
+      </View>
+      {right ?? <Text style={{ color: theme.colors.textMuted, fontSize: 18 }}>›</Text>}
+    </TouchableOpacity>
+  );
+}
 
 const AccountScreen: React.FC = () => {
   const { theme, themeMode, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
-  const { refreshData } = useHabits();
+  const { habits, sessions, refreshData } = useHabits();
   const { isPremium, refreshPremium } = usePremium();
   const [showAuth, setShowAuth] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
   const [wakeUpTime, setWakeUpTime] = useState('07:00');
   const [bedTime, setBedTime] = useState('23:00');
   const [editTimeType, setEditTimeType] = useState<'wake' | 'bed' | null>(null);
+  const [userName, setUserName] = useState('');
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     storage.getUserPreferences().then(prefs => {
       if (prefs.wakeUpTime) setWakeUpTime(prefs.wakeUpTime);
       if (prefs.bedTime) setBedTime(prefs.bedTime);
+      if (prefs.name) setUserName(prefs.name);
     });
   }, []);
-  const bottomSafe = Platform.OS === 'android' ? Math.max(insets.bottom, 24) : insets.bottom;
 
-  if (showAuth) {
-    return <AuthScreen onClose={() => setShowAuth(false)} />;
-  }
+  const bottomSafe = Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0);
+  const topInset = insets.top + (Platform.OS === 'web' ? 0 : 0);
+
+  const totalStreak = Math.max(0, ...habits.map(h => h.streak || 0));
+  const completedSessions = sessions.filter(s => s.completed).length;
+  const avatarLetter = (userName || user?.email || 'U')[0].toUpperCase();
+
+  if (showAuth) return <AuthScreen onClose={() => setShowAuth(false)} />;
 
   if (showPremium) {
     return (
       <PremiumScreen
         onClose={() => setShowPremium(false)}
-        onPurchased={() => {
-          setShowPremium(false);
-          refreshPremium();
-        }}
+        onPurchased={() => { setShowPremium(false); refreshPremium(); }}
       />
     );
   }
 
-  const handleClearData = () => {
-    Alert.alert(
-      'Clear All Data',
-      'This will permanently delete ALL your habits, sessions, streaks, and settings. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear Everything',
-          style: 'destructive',
-          onPress: async () => {
-            await storage.clearAll();
-            await refreshData();
-            Alert.alert('Data Cleared', 'All habits, streaks, and sessions have been deleted. Restart the app to begin fresh.');
-          },
-        },
-      ],
+  if (editTimeType === 'wake') {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.colors.background, paddingTop: topInset }]}>
+        <View style={styles.pickerHeader}>
+          <TouchableOpacity onPress={() => setEditTimeType(null)} style={styles.pickerBack}>
+            <Text style={[styles.pickerBackText, { color: theme.colors.primary }]}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>Wake Up Time ☀️</Text>
+        </View>
+        <WakeTimePickerStep value={wakeUpTime} onChange={v => { setWakeUpTime(v); storage.updateUserPreferences({ wakeUpTime: v }); }} theme={theme} />
+        <TouchableOpacity style={[styles.pickerDone, { backgroundColor: theme.colors.primary }]} onPress={() => setEditTimeType(null)}>
+          <Text style={styles.pickerDoneText}>Save</Text>
+        </TouchableOpacity>
+      </View>
     );
-  };
-
-  interface SettingItem {
-    label: string;
-    emoji: string;
-    onPress: () => void;
-    accent?: boolean;
-    destructive?: boolean;
-    rightText?: string;
   }
 
-  interface SettingSection {
-    title: string;
-    items: SettingItem[];
+  if (editTimeType === 'bed') {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.colors.background, paddingTop: topInset }]}>
+        <View style={styles.pickerHeader}>
+          <TouchableOpacity onPress={() => setEditTimeType(null)} style={styles.pickerBack}>
+            <Text style={[styles.pickerBackText, { color: theme.colors.primary }]}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>Bedtime 🌙</Text>
+        </View>
+        <BedTimePickerStep value={bedTime} onChange={v => { setBedTime(v); storage.updateUserPreferences({ bedTime: v }); }} theme={theme} />
+        <TouchableOpacity style={[styles.pickerDone, { backgroundColor: theme.colors.primary }]} onPress={() => setEditTimeType(null)}>
+          <Text style={styles.pickerDoneText}>Save</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
-
-  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'User';
-
-  const settingSections: SettingSection[] = [
-    {
-      title: 'Account',
-      items: user
-        ? [
-            {
-              label: userName,
-              emoji: '\u{1F464}',
-              onPress: () => {},
-            },
-            {
-              label: `${user.email}`,
-              emoji: '\u{2709}\u{FE0F}',
-              onPress: () => {},
-            },
-            {
-              label: 'Sign Out',
-              emoji: '\u{1F6AA}',
-              onPress: () => {
-                Alert.alert('Sign Out', 'Are you sure?', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Sign Out', onPress: signOut, style: 'destructive' },
-                ]);
-              },
-              destructive: true,
-            },
-          ]
-        : [
-            {
-              label: 'Sign In / Sign Up',
-              emoji: '\u{1F511}',
-              onPress: () => setShowAuth(true),
-            },
-          ],
-    },
-    {
-      title: 'Premium',
-      items: isPremium
-        ? [
-            {
-              label: 'Premium Active',
-              emoji: '\u{1F451}',
-              onPress: () => Alert.alert('Premium', 'You have full access to all premium features!'),
-              accent: true,
-            },
-            {
-              label: 'Manage Subscription',
-              emoji: '\u{2699}\u{FE0F}',
-              onPress: async () => {
-                try {
-                  await RevenueCatUI.presentCustomerCenter();
-                } catch (e) {
-                  Alert.alert('Subscription', 'Manage your subscription in your device settings.');
-                }
-              },
-            },
-            {
-              label: 'Restore Purchases',
-              emoji: '\u{1F504}',
-              onPress: async () => {
-                const restored = await revenueCatService.restorePurchases();
-                Alert.alert(
-                  restored ? 'Restored' : 'No Purchases Found',
-                  restored
-                    ? 'Your premium access has been restored.'
-                    : 'No previous purchases found.',
-                );
-                refreshPremium();
-              },
-            },
-          ]
-        : [
-            {
-              label: 'Upgrade to Premium',
-              emoji: '\u{2B50}',
-              onPress: () => {
-                if (!user) {
-                  Alert.alert(
-                    'Sign in required',
-                    'Please sign in or create an account before upgrading to Premium.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sign In', onPress: () => setShowAuth(true) },
-                    ],
-                  );
-                  return;
-                }
-                setShowPremium(true);
-              },
-              accent: true,
-            },
-            {
-              label: 'Restore Purchases',
-              emoji: '\u{1F504}',
-              onPress: async () => {
-                const restored = await revenueCatService.restorePurchases();
-                Alert.alert(
-                  restored ? 'Restored' : 'No Purchases Found',
-                  restored
-                    ? 'Your premium access has been restored.'
-                    : 'No previous purchases found.',
-                );
-                refreshPremium();
-              },
-            },
-          ],
-    },
-    {
-      title: 'Appearance',
-      items: [
-        {
-          label: `Theme: ${themeMode === 'dark' ? 'Dark' : 'Light'}`,
-          emoji: themeMode === 'dark' ? '\u{1F319}' : '\u{2600}\u{FE0F}',
-          onPress: toggleTheme,
-          rightText: 'Toggle',
-        },
-      ],
-    },
-    {
-      title: 'Schedule',
-      items: [
-        {
-          label: 'Wake Up Time',
-          emoji: '\u{2600}\u{FE0F}',
-          onPress: () => setEditTimeType('wake'),
-          rightText: wakeUpTime,
-        },
-        {
-          label: 'Bed Time',
-          emoji: '\u{1F319}',
-          onPress: () => setEditTimeType('bed'),
-          rightText: bedTime,
-        },
-      ],
-    },
-    {
-      title: 'Data',
-      items: [
-        {
-          label: 'Clear All Data',
-          emoji: '\u{1F5D1}\u{FE0F}',
-          onPress: handleClearData,
-          destructive: true,
-        },
-      ],
-    },
-    {
-      title: 'About',
-      items: [
-        {
-          label: 'HabitGen v1.0.0',
-          emoji: '\u{1F4F1}',
-          onPress: () => {},
-        },
-        {
-          label: 'Rate HabitGen',
-          emoji: '\u{2764}\u{FE0F}',
-          onPress: () => Alert.alert('Thanks!', 'Rating feature will open your app store.'),
-        },
-      ],
-    },
-  ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+      {/* Fixed header */}
+      <View style={[styles.header, { paddingTop: topInset, backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Account</Text>
+      </View>
+
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + bottomSafe }]}
-        showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Account</Text>
-
-        {/* Profile card */}
-        <View style={[styles.profileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.colors.primaryLight }]}>
-            <Text style={styles.avatarText}>{'\u{1F525}'}</Text>
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomSafe + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile hero */}
+        <View style={[styles.profileHero, { backgroundColor: theme.colors.primary }]}>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarLetter}>{avatarLetter}</Text>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: theme.colors.text }]}>
-              {user ? user.email?.split('@')[0] : 'HabitGen User'}
-            </Text>
-            <Text style={[styles.profileSub, { color: theme.colors.textMuted }]}>
-              {user ? 'Synced' : 'Free Tier - Local Only'}
-            </Text>
+          <View>
+            <Text style={styles.heroName}>{userName || (user ? user.email?.split('@')[0] : 'Friend')}</Text>
+            <Text style={styles.heroEmail}>{user?.email || 'Not signed in'}</Text>
+            {isPremium && (
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumBadgeText}>⭐ Premium</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {settingSections.map(section => (
-          <View key={section.title} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
-              {section.title.toUpperCase()}
-            </Text>
-            <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              {section.items.map((item, idx) => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[
-                    styles.settingRow,
-                    idx < section.items.length - 1 && {
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.border,
-                    },
-                  ]}
-                  onPress={item.onPress}
-                  activeOpacity={0.6}>
-                  <Text style={styles.settingEmoji}>{item.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.settingLabel,
-                      {
-                        color: item.destructive
-                          ? theme.colors.error
-                          : item.accent
-                          ? theme.colors.accent
-                          : theme.colors.text,
-                      },
-                    ]}>
-                    {item.label}
-                  </Text>
-                  {item.rightText && (
-                    <Text style={[styles.rightText, { color: theme.colors.primary }]}>
-                      {item.rightText}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          {[
+            { val: totalStreak, label: 'Best Streak', emoji: '🔥' },
+            { val: completedSessions, label: 'Sessions', emoji: '✅' },
+            { val: habits.length, label: 'Habits', emoji: '📋' },
+          ].map(s => (
+            <View key={s.label} style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+              <Text style={{ fontSize: 20 }}>{s.emoji}</Text>
+              <Text style={[styles.statVal, { color: theme.colors.text }]}>{s.val}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{s.label}</Text>
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
 
-        <View style={styles.bottomSpacer} />
+        {/* Account section */}
+        <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>ACCOUNT</Text>
+        <View style={[styles.section, { borderColor: theme.colors.border }]}>
+          {!user ? (
+            <SettingRow emoji="🔑" emojiColor="#5B4FE8" label="Sign In / Create Account" sublabel="Sync your data across devices" onPress={() => setShowAuth(true)} theme={theme} />
+          ) : (
+            <>
+              <SettingRow emoji="👤" emojiColor="#5B4FE8" label={user.email || 'Signed In'} sublabel="Your account" theme={theme} />
+              <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+              <SettingRow emoji="🚪" emojiColor="#FF5252" label="Sign Out" onPress={() => Alert.alert('Sign Out', 'Are you sure?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign Out', style: 'destructive', onPress: signOut }])} theme={theme} />
+            </>
+          )}
+        </View>
+
+        {/* Premium */}
+        {!isPremium && (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>UPGRADE</Text>
+            <View style={[styles.section, { borderColor: theme.colors.border }]}>
+              <SettingRow emoji="⭐" emojiColor="#FFC107" label="Go Premium" sublabel="Unlock all features & remove ads" onPress={() => setShowPremium(true)} theme={theme} />
+            </View>
+          </>
+        )}
+
+        {/* Preferences */}
+        <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>PREFERENCES</Text>
+        <View style={[styles.section, { borderColor: theme.colors.border }]}>
+          <SettingRow
+            emoji="🌙"
+            emojiColor="#7B72F0"
+            label="Dark Mode"
+            sublabel={`Currently ${themeMode}`}
+            right={<Switch value={themeMode === 'dark'} onValueChange={toggleTheme} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor="#fff" />}
+            theme={theme}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          <SettingRow emoji="☀️" emojiColor="#FFC107" label={`Wake up: ${wakeUpTime}`} sublabel="Tap to change" onPress={() => setEditTimeType('wake')} theme={theme} />
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          <SettingRow emoji="🌙" emojiColor="#7B72F0" label={`Bedtime: ${bedTime}`} sublabel="Tap to change" onPress={() => setEditTimeType('bed')} theme={theme} />
+        </View>
+
+        {/* About */}
+        <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>ABOUT</Text>
+        <View style={[styles.section, { borderColor: theme.colors.border }]}>
+          <SettingRow emoji="ℹ️" emojiColor="#42A5F5" label="HabitGen" sublabel="Version 1.0.0 · com.starktechstudio.habitgen" theme={theme} />
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          <SettingRow emoji="⭐" emojiColor="#FFC107" label="Rate the App" sublabel="Your feedback helps us improve" onPress={() => Alert.alert('Thanks!', 'Rating available in the App Store/Play Store.')} theme={theme} />
+        </View>
+
+        {/* Danger */}
+        <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>DANGER ZONE</Text>
+        <View style={[styles.section, { borderColor: theme.colors.border }]}>
+          <TouchableOpacity
+            style={[styles.row, { backgroundColor: '#FFF0F0' }]}
+            onPress={() => Alert.alert('Clear All Data', 'This will permanently delete all habits, streaks, and sessions. This cannot be undone.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Clear Everything', style: 'destructive', onPress: async () => { await storage.clearAll?.(); refreshData(); } }])}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#FF525220' }]}>
+              <Text style={{ fontSize: 18 }}>🗑️</Text>
+            </View>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: '#FF5252' }]}>Clear All Data</Text>
+              <Text style={[styles.rowSub, { color: '#FF525280' }]}>Delete all habits, streaks and history</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-
-      <Modal
-        visible={editTimeType !== null}
-        transparent
-        animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-              {editTimeType === 'wake' ? 'Wake Up Time' : 'Bed Time'}
-            </Text>
-            {editTimeType === 'wake' && (
-              <WakeTimePickerStep
-                value={wakeUpTime}
-                onChange={setWakeUpTime}
-              />
-            )}
-            {editTimeType === 'bed' && (
-              <BedTimePickerStep
-                value={bedTime}
-                onChange={setBedTime}
-              />
-            )}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { borderColor: theme.colors.border }]}
-                onPress={() => setEditTimeType(null)}>
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
-                onPress={async () => {
-                  await storage.updateUserPreferences(
-                    editTimeType === 'wake' ? { wakeUpTime } : { bedTime },
-                  );
-                  setEditTimeType(null);
-                }}>
-                <Text style={styles.modalButtonTextPrimary}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
 
+export default AccountScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 56 },
-  title: { fontSize: 30, fontWeight: '800', marginBottom: 18 },
-  profileCard: {
+  root: { flex: 1 },
+  header: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+    zIndex: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    paddingTop: 8,
+  },
+  headerTitle: {
+    fontSize: Math.min(width * 0.065, 26),
+    fontWeight: '900',
+  },
+  scroll: { padding: 16 },
+  profileHero: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 24,
+    gap: 16,
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 16,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
+  avatarCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  avatarText: { fontSize: 26 },
-  profileInfo: { marginLeft: 14 },
-  profileName: { fontSize: 17, fontWeight: '700' },
-  profileSub: { fontSize: 12, marginTop: 2 },
-  section: { marginBottom: 22 },
-  sectionTitle: {
+  avatarLetter: { fontSize: 26, fontWeight: '900', color: '#fff' },
+  heroName: { fontSize: 20, fontWeight: '900', color: '#fff', marginBottom: 2 },
+  heroEmail: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '400' },
+  premiumBadge: {
+    backgroundColor: '#FFC107',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  premiumBadgeText: { fontSize: 11, fontWeight: '800', color: '#1A1A2E' },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  statCard: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 14,
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  statVal: { fontSize: 22, fontWeight: '900' },
+  statLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 8,
     marginLeft: 4,
+    marginTop: 4,
   },
-  sectionCard: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-  },
-  settingEmoji: { fontSize: 18, marginRight: 12 },
-  settingLabel: { fontSize: 14, fontWeight: '500', flex: 1 },
-  rightText: { fontSize: 12, fontWeight: '600' },
-  bottomSpacer: { height: 24 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+  section: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 20,
-    textAlign: 'center',
   },
-  modalButtons: {
+  row: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     gap: 12,
-    marginTop: 24,
   },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: { flex: 1 },
+  rowLabel: { fontSize: 15, fontWeight: '700', marginBottom: 1 },
+  rowSub: { fontSize: 12, fontWeight: '400' },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 64 },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 20,
+  },
+  pickerBack: { padding: 4 },
+  pickerBackText: { fontSize: 16, fontWeight: '700' },
+  pickerTitle: { fontSize: 20, fontWeight: '800' },
+  pickerDone: {
+    margin: 20,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  modalButtonPrimary: {
-    borderWidth: 0,
-  },
-  modalButtonText: { fontSize: 16, fontWeight: '600' },
-  modalButtonTextPrimary: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  pickerDoneText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });
-
-export default AccountScreen;
